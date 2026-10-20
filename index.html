@@ -1,0 +1,1197 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>html{color-scheme:light}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Dashboard Effective Call</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+/* Layout: one working column, header with data source + upload, tabs (Latest day / Month to date), cards in auto-fit grids. Palette follows the Effective Call deck (navy, paper, steel blue, rust). */
+:root{
+  --color-bg:#F7F6F2; --color-panel:#FFFFFF; --color-fg:#14213D; --color-fg-muted:#5B6478; --color-border-line:#DDE1E8;
+  --color-ok:#2E7D4F; --color-warn:#B07A12; --color-bad:#B3261E; --accent:#2F6DB5; --accent-ink:#FFFFFF;
+  --c1:#2F6DB5; --c2:#B3560F; --c3:#2A8C7A; --c4:#7A5BA6;
+  --cds-chart-grid:#E8EBF0; --cds-chart-axis:#B9C0CC; --cds-chart-muted:#C5CCD8; --cds-chart-status-critical:#B3261E;
+  --cds-surface-popover:#FFFFFF; --cds-border:#DDE1E8; --cds-text-secondary:#5B6478; --cds-shadow-popover:0 4px 16px rgba(20,33,61,.12);
+  --font-anthropic-sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --font-anthropic-serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --cds-font-size-caption:.8125rem; --cds-font-size-body:.9375rem; --cds-font-size-heading:1.125rem; --cds-font-size-title:2rem; --cds-font-weight-medium:600;
+  --cds-gap-xs:4px; --cds-gap-sm:8px; --cds-gap-md:14px; --cds-gap-lg:24px; --cds-pad-xs:4px; --cds-pad-sm:8px; --cds-pad-md:12px; --cds-pad-lg:16px;
+  --cds-radius:8px; --cds-dur-slow:.3s;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --color-bg:#0F1626; --color-panel:#172036; --color-fg:#E8ECF3; --color-fg-muted:#9AA4B8; --color-border-line:#2A3550;
+  --color-ok:#5CC28A; --color-warn:#E0B04A; --color-bad:#F07A70; --accent:#7FAAE3; --accent-ink:#0F1626;
+  --c1:#7FAAE3; --c2:#F2A65A; --c3:#5CC2AE; --c4:#B79BE0;
+  --cds-chart-grid:#243049; --cds-chart-axis:#3A4766; --cds-chart-muted:#3A4766; --cds-chart-status-critical:#F07A70;
+  --cds-surface-popover:#1D2842; --cds-border:#2A3550; --cds-text-secondary:#9AA4B8; --cds-shadow-popover:0 4px 16px rgba(0,0,0,.4);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --color-bg:#0F1626; --color-panel:#172036; --color-fg:#E8ECF3; --color-fg-muted:#9AA4B8; --color-border-line:#2A3550;
+  --color-ok:#5CC28A; --color-warn:#E0B04A; --color-bad:#F07A70; --accent:#7FAAE3; --accent-ink:#0F1626;
+  --c1:#7FAAE3; --c2:#F2A65A; --c3:#5CC2AE; --c4:#B79BE0;
+  --cds-chart-grid:#243049; --cds-chart-axis:#3A4766; --cds-chart-muted:#3A4766; --cds-chart-status-critical:#F07A70;
+  --cds-surface-popover:#1D2842; --cds-border:#2A3550; --cds-text-secondary:#9AA4B8; --cds-shadow-popover:0 4px 16px rgba(0,0,0,.4);
+  color-scheme:dark}
+body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-anthropic-sans)}
+.wrap{max-width:84rem;margin:0 auto;padding-block:24px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.ec h1,.ec .ph{text-wrap:balance}
+.ec .card,.ec .tile{min-width:0}
+.ec .scroll{overflow:auto}
+.dash-skeleton{color:var(--color-fg-muted)}
+.upd{display:flex;flex-wrap:wrap;gap:var(--cds-gap-sm);align-items:center;margin-top:var(--cds-gap-md)}
+.btn{font:inherit;font-size:var(--cds-font-size-caption);font-weight:600;padding:7px 14px;border-radius:999px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.btn:focus-visible,.ec .chip:focus-visible,.ec .tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn[aria-disabled=true]{opacity:.5;pointer-events:none}
+#upd-status{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+#upd-status.err{color:var(--color-bad)} #upd-status.ok{color:var(--color-ok)}
+.empty{background:var(--color-panel);border:1px dashed var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-lg);font-size:var(--cds-font-size-body);line-height:1.5;max-width:46rem}
+.empty b{font-weight:600}
+.ec .xgrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));align-items:start}
+.ec .xgrid > div{min-width:0}
+.ec .xsub{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);margin-bottom:var(--cds-gap-sm)}
+.ec .tile .tgt{font-size:var(--cds-font-size-caption);font-weight:600;margin-top:2px}
+.ec .tile .tgt.good{color:var(--color-ok)} .ec .tile .tgt.bad{color:var(--color-bad)}
+.smsel{font:inherit;font-size:var(--cds-font-size-caption);padding:var(--cds-pad-xs) var(--cds-pad-sm);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-panel);color:var(--color-fg);max-width:100%;min-width:0}
+.tsum{display:flex;flex-wrap:wrap;gap:var(--cds-gap-sm) var(--cds-gap-lg);font-size:var(--cds-font-size-body);margin-bottom:var(--cds-gap-md)}
+.tsum b{font-family:var(--font-anthropic-serif);font-weight:600;font-size:1.25rem;font-variant-numeric:tabular-nums}
+@media (min-width:40rem){#dtile-sales_same_day_ec,#tile-sales_same_day_ec{grid-column:span 2}}
+#dtile-sales_same_day_ec .val,#tile-sales_same_day_ec .val{overflow-wrap:anywhere}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<style>
+
+.ec{font-family:var(--font-anthropic-sans);color:var(--color-fg);display:flex;flex-direction:column;gap:var(--cds-gap-lg)}
+.ec h1{font-family:var(--font-anthropic-serif);font-weight:400;font-size:var(--cds-font-size-title);margin:0}
+.ec .sub{color:var(--color-fg-muted);font-size:var(--cds-font-size-body);margin:var(--cds-gap-xs) 0 0}
+.ec .take{font-size:var(--cds-font-size-body);margin:var(--cds-gap-sm) 0 0;max-width:70rem;line-height:1.5}
+.ec .filters{display:flex;flex-wrap:wrap;gap:var(--cds-gap-xs);align-items:center}
+.ec .filters span{color:var(--color-fg-muted);font-size:var(--cds-font-size-caption);margin-right:var(--cds-gap-xs)}
+.ec .chip{font:inherit;font-size:var(--cds-font-size-caption);padding:var(--cds-pad-xs) var(--cds-pad-sm);border:1px solid var(--color-border-line);border-radius:999px;background:var(--color-panel);color:var(--color-fg);cursor:pointer}
+.ec .chip[aria-pressed=true]{background:var(--color-fg);color:var(--color-bg);border-color:var(--color-fg)}
+.ec .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));gap:var(--cds-gap-md)}
+.ec .tile,.ec .card{background:var(--color-panel);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-lg)}
+.ec .tile .lab{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.ec .tile .val{font-family:var(--font-anthropic-serif);font-weight:400;font-size:var(--cds-font-size-title);font-variant-numeric:tabular-nums;margin:var(--cds-gap-xs) 0;min-height:1.2em}
+.ec .tile .cmp{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);font-variant-numeric:tabular-nums}
+.ec .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,26rem),1fr));gap:var(--cds-gap-md)}
+.ec .card h2{font-size:var(--cds-font-size-heading);font-weight:var(--cds-font-weight-medium);margin:0}
+.ec .card .note{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);margin:var(--cds-gap-xs) 0 var(--cds-gap-md)}
+.ec .chart{position:relative;min-height:260px}
+.ec .tip{position:absolute;pointer-events:none;background:var(--cds-surface-popover);border:1px solid var(--cds-border);border-radius:var(--cds-radius);box-shadow:var(--cds-shadow-popover);padding:var(--cds-pad-xs) var(--cds-pad-sm);font-size:var(--cds-font-size-caption);display:none;white-space:nowrap;z-index:2}
+.ec .tip .t{color:var(--cds-text-secondary)}
+.ec .legend{display:flex;flex-wrap:wrap;gap:var(--cds-gap-md);font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);margin-bottom:var(--cds-gap-sm)}
+.ec .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.ec table{width:100%;border-collapse:collapse;font-size:var(--cds-font-size-caption);font-variant-numeric:tabular-nums}
+.ec th,.ec td{padding:var(--cds-pad-xs) var(--cds-pad-sm);border-bottom:1px solid var(--color-border-line);text-align:right;white-space:nowrap}
+.ec th:first-child,.ec td:first-child,.ec th.l,.ec td.l{text-align:left}
+.ec th{position:sticky;top:0;background:var(--color-panel);color:var(--color-fg-muted);font-weight:var(--cds-font-weight-medium);cursor:pointer}
+.ec .scroll{max-height:28rem;overflow:auto}
+.ec tr.sel td{font-weight:var(--cds-font-weight-medium);background:var(--cds-chart-grid)}
+.ec tbody tr.click{cursor:pointer}
+.ec input.search{font:inherit;font-size:var(--cds-font-size-caption);padding:var(--cds-pad-xs) var(--cds-pad-sm);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg);margin-bottom:var(--cds-gap-sm);width:min(100%,18rem)}
+.ec .bad{color:var(--color-bad)}
+.ec .fail{display:flex;align-items:center;justify-content:center;gap:8px;min-height:inherit;color:var(--color-fg-muted);font-size:var(--cds-font-size-caption)}
+.ec .fail::before{content:"";width:.375rem;height:.375rem;border-radius:50%;background:var(--color-bad)}
+.ec .tabs{display:flex;gap:var(--cds-gap-xs);border-bottom:1px solid var(--color-border-line)}
+.ec .tab{font:inherit;font-size:var(--cds-font-size-body);padding:var(--cds-pad-sm) var(--cds-pad-md);border:0;border-bottom:2px solid transparent;background:none;color:var(--color-fg-muted);cursor:pointer}
+.ec .tab[aria-selected=true]{color:var(--color-fg);border-bottom-color:var(--color-fg)}
+.ec .page{display:flex;flex-direction:column;gap:var(--cds-gap-lg)}
+.ec .page[hidden]{display:none}
+.ec .ph{font-family:var(--font-anthropic-serif);font-weight:400;font-size:var(--cds-font-size-heading);margin:0}
+.ec .dayctl{display:flex;flex-wrap:wrap;gap:var(--cds-gap-xs);align-items:center}
+.ec .dayctl select{font:inherit;font-size:var(--cds-font-size-body);padding:var(--cds-pad-xs) var(--cds-pad-sm);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg)}
+.ec .chip:disabled{opacity:.4;cursor:default}
+.ec .good{color:var(--color-ok)}
+[data-dash-source-state=empty]{color:transparent}
+[data-dash-source-state=refreshing]{opacity:.5;transition:opacity var(--cds-dur-slow)}
+</style>
+
+<div class="wrap"><div class="ec">
+  <header id="top">
+    <h1>Effective Call — Region 5 B2B</h1>
+    <p class="sub" id="src-line">Memuat data terbaru…</p>
+    <div class="upd" id="upd">
+      <label class="btn" id="upload-btn" for="file-in" role="button" tabindex="0">Upload file billing baru</label>
+      <button class="btn ghost" type="button" id="dl-btn" hidden>Download data.json</button>
+      <button class="btn ghost" type="button" id="clear-btn" hidden>Hapus data di browser ini</button>
+      <input type="file" id="file-in" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+      <span id="upd-status" role="status">Gunakan file Billing bulanan dengan sheet Plan Visit, Data Tracking Visit, Billing Sales B2B dan Target.</span>
+    </div>
+  </header>
+  <div class="empty" id="empty" hidden><b>Belum ada data.</b> <span id="empty-text">Upload file Billing bulanan (.xlsx dengan sheet Plan Visit, Data Tracking Visit, Billing Sales B2B dan Target) lewat tombol di atas. File diproses di browser Anda dan tidak dikirim ke mana pun.</span></div>
+  <div id="main" class="page">
+  <div class="tabs" role="tablist" aria-label="Tampilan"><button class="tab" role="tab" data-tab="daily" id="daily-tab">Hari terakhir</button><button class="tab" role="tab" data-tab="mtd" id="mtd-tab">Bulan berjalan</button></div>
+  <div class="filters" id="brand-filter" role="group" aria-label="Brand"><span>Brand</span></div>
+  <div class="filters" id="sm-filter-row"><label for="sm-filter"><span>Salesman</span></label><select id="sm-filter" class="smsel" data-source="salesmen"><option value="">Semua salesman</option></select></div>
+  <section id="daily" class="page">
+    <div class="dayctl">
+      <h2 class="ph">Hari billing terakhir · <span class="dlabel">—</span></h2>
+      <button class="chip" type="button" id="sm-clear" hidden></button>
+    </div>
+    <p class="take" id="day-take">
+      <span class="tb">Semua brand</span>:
+      <span class="dmark" data-source="daily_brand" data-field="executed">—</span> dari <span class="dmark" data-source="daily_brand" data-field="planned">—</span> plan kunjungan terlaksana,
+      <span class="dmark" data-source="daily_brand" data-field="visit_call">—</span> Visit/Call, dan <span class="dmark" data-source="daily_brand" data-field="ec_same_day">—</span> di antaranya ada billing di hari yang sama.
+    </p>
+    <div class="tiles" id="day-tiles"></div>
+    <div class="card" id="day-sales-card">
+      <h2>Salesman pada <span class="dlabel">—</span></h2>
+      <p class="note">Terlaksana + Check-in tambahan + Di luar plan = Visit+Call. Check-in tambahan = check-in ke-2 dst. pada plan yang sudah terlaksana. Klik salesman untuk melihat hanya kunjungan dan plan terlewat miliknya di bawah. Merah = kepatuhan di bawah 50% atau 0 effective call. % EC hari sama hijau jika mencapai target 50%, merah jika di bawah. <span class="bname">Semua brand</span>.</p>
+      <div class="scroll"><table id="day-sales" data-source="daily_salesman" data-row-key="date,sales_id">
+        <thead><tr><th data-field="salesman" class="l" data-k="salesman">Salesman</th><th data-field="brand" class="l" data-k="brand">Brand</th><th data-field="planned" data-k="planned">Plan</th><th data-field="missed" data-k="missed">Terlewat</th><th data-field="compliance" data-k="compliance">Kepatuhan</th><th data-field="executed" data-k="executed">Terlaksana</th><th data-field="extra" data-k="extra">Check-in tambahan</th><th data-field="unplanned" data-k="unplanned">Di luar plan</th><th data-field="visit_call" data-k="visit_call">Visit+Call</th><th data-field="ec_same_day" data-k="ec_same_day">EC hari sama</th><th data-field="ec_same_day_pct" data-k="ec_same_day_pct">% EC hari sama</th><th data-field="sales_same_day_ec" data-k="sales_same_day_ec">Sales EC hari sama (Rp)</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+    <div class="grid">
+      <div class="card" id="day-visits-card">
+        <h2>Visit dan call</h2>
+        <p class="note"><span class="dlabel">—</span> · <span class="bname">Semua brand</span><span class="smname"></span>. Billing hari sama = salesman tersebut ada billing ke dealer itu di hari yang sama.</p>
+        <input class="search" id="visit-search" type="search" placeholder="Cari dealer atau salesman" aria-label="Cari kunjungan">
+        <div class="scroll"><table id="day-visits" data-source="daily_visits" data-row-key="visit_id">
+          <thead><tr><th data-field="time" class="l">Jam</th><th data-field="salesman" class="l">Salesman</th><th data-field="dealer" class="l">Dealer</th><th data-field="activity" class="l">Jenis</th><th data-field="plan_status" class="l">Status plan</th><th data-field="hasil_visit" class="l">Hasil visit</th><th data-field="effective_same_day" class="l">Billing hari sama</th><th data-field="same_day_sales">Sales (Rp)</th></tr></thead>
+          <tbody></tbody></table></div>
+      </div>
+      <div class="card" id="day-missed-card">
+        <h2>Plan terlewat</h2>
+        <p class="note">Dealer yang di-plan tapi tidak ada Visit/Call di hari itu. “Dikunjungi minggu sama” = dikunjungi di hari lain pada minggu yang sama. <span class="bname">Semua brand</span><span class="smname"></span>.</p>
+        <div class="scroll"><table id="day-missed" data-source="daily_missed" data-row-key="plan_key">
+          <thead><tr><th data-field="salesman" class="l">Salesman</th><th data-field="dealer" class="l">Dealer</th><th data-field="visited_same_week" class="l">Dikunjungi minggu sama</th></tr></thead>
+          <tbody></tbody></table></div>
+      </div>
+    </div>
+  </section>
+  <section id="mtd" class="page" hidden>
+
+  <div id="mtd-head">
+    <h2 class="ph">Bulan berjalan · <span class="period-short">—</span></h2>
+    <p class="sub">Plan Visit, Data Tracking Visit dan Billing Sales B2B. Sales = Total Nett Amount No Tax. Salesman dan dealer yang sama, dari tanggal 1 sampai hari billing terakhir.</p>
+    <p class="take" id="takeaway">
+      <span class="tb">Semua brand</span>: <span data-source="kpi" data-field="compliance" data-where="brand=All" class="dash-skeleton">—</span> plan kunjungan terlaksana di hari plan;
+      <span data-source="kpi" data-field="ec_same_day_pct" data-where="brand=All" class="dash-skeleton">—</span> Visit/Call menghasilkan billing di hari yang sama, dan
+      <span data-source="kpi" data-field="pct_sales_same_day_ec" data-where="brand=All" class="dash-skeleton">—</span> sales ter-billing di hari kunjungan.
+    </p>
+  </div>
+
+  
+
+  <section class="tiles" id="kpis" aria-label="Angka utama"></section>
+
+  <div class="grid">
+    <div class="card" id="brand-card">
+      <h2>Per brand</h2>
+      <p class="note"><span class="period">—</span>. Terlaksana + Check-in tambahan + Di luar plan = Visit+Call. Klik baris untuk memfilter halaman. EC = Visit/Call yang diikuti billing dari salesman tersebut ke dealer itu.</p>
+      <div class="scroll"><table id="brand-table" data-source="kpi" data-row-key="brand">
+        <thead><tr><th data-field="brand">Brand</th><th data-field="planned">Plan</th><th data-field="compliance">Kepatuhan plan</th><th data-field="executed">Terlaksana</th><th data-field="extra">Check-in tambahan</th><th data-field="unplanned">Di luar plan</th><th data-field="visit_call">Visit+Call</th><th data-field="ec_same_day_pct">EC hari sama</th><th data-field="ec_same_week_pct">EC minggu sama</th><th data-field="ec_forward_pct">EC setelah visit</th><th data-field="pct_sales_same_day_ec">% sales EC hari sama</th><th data-field="sales_total">Sales (Rp)</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+    <div class="card" id="weekly-card">
+      <h2>Per minggu</h2>
+      <p class="note"><span id="weeknote">—</span> <span class="bname">Semua brand</span>.</p>
+      <div class="legend" id="weekly-legend"></div>
+      <div class="chart" id="weekly-chart" data-source="weekly"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card" id="unplanned-card">
+      <h2>EC hari sama per jenis kunjungan</h2>
+      <p class="note">Pindah hari = dealer di-plan di hari lain pada minggu yang sama. Batang = EC hari sama; label = jumlah. Target EC 50%. <span class="bname">Semua brand</span>.</p>
+      <div class="chart" id="unplanned-chart" data-source="unplanned"></div>
+    </div>
+    <div class="card" id="timing-card">
+      <h2>Kapan sales EC minggu sama ter-billing?</h2>
+      <p class="note">Sales ke dealer yang dikunjungi minggu itu, menurut hari billing dibanding hari kunjungan. <span class="bname">Semua brand</span>.</p>
+      <div class="chart" id="timing-chart" data-source="timing"></div>
+    </div>
+  </div>
+
+  <div class="card" id="extra-card">
+    <h2>Check-in tambahan</h2>
+    <p class="note">Check-in ke-2 dst. oleh salesman yang sama ke dealer yang sama pada hari plan yang sudah terlaksana. Urutan berdasarkan jam check-in. Selisih merah = 10 menit atau kurang dari check-in pertama (kemungkinan check-in ganda). <span class="bname">Semua brand</span>.</p>
+    <div class="grid xgrid">
+      <div><div class="xsub">Jumlah per salesman</div><div class="chart" id="extra-chart" data-source="extra_checkins" style="min-height:120px"></div></div>
+      <div style="min-width:0">
+        <input class="search" id="extra-search" type="search" placeholder="Cari dealer atau salesman" aria-label="Cari check-in tambahan">
+        <div class="scroll"><table id="extra-table" data-source="extra_checkins" data-row-key="id">
+          <thead><tr><th data-field="date" class="l">Tanggal</th><th data-field="salesman" class="l">Salesman</th><th data-field="dealer" class="l">Dealer</th><th data-field="nth">Ke-</th><th data-field="first_time" class="l">Check-in pertama</th><th data-field="time" class="l">Check-in ini</th><th data-field="gap_min">Selisih (menit)</th><th data-field="activity" class="l">Jenis</th><th data-field="hasil_visit" class="l">Hasil visit</th><th data-field="effective_same_day" class="l">Billing hari sama</th></tr></thead>
+          <tbody></tbody></table></div>
+      </div>
+    </div>
+    <p class="note" id="extra-none" hidden>Tidak ada check-in tambahan.</p>
+  </div>
+
+  <div class="card" id="salesmen-card">
+    <h2>Salesman</h2>
+    <p class="note">Klik kolom untuk mengurutkan. <span class="bname">Semua brand</span>.</p>
+    <input class="search" id="sales-search" type="search" placeholder="Cari salesman" aria-label="Cari salesman">
+    <div class="scroll"><table id="sales-table" data-source="salesmen" data-row-key="sales_id">
+      <thead><tr><th data-field="salesman" class="l" data-k="salesman">Salesman</th><th data-field="brand" class="l" data-k="brand">Brand</th><th data-field="planned" data-k="planned">Plan</th><th data-field="compliance" data-k="compliance">Kepatuhan</th><th data-field="executed" data-k="executed">Terlaksana</th><th data-field="extra" data-k="extra">Check-in tambahan</th><th data-field="unplanned" data-k="unplanned">Di luar plan</th><th data-field="visit_call" data-k="visit_call">Visit+Call</th><th data-field="ec_same_day_pct" data-k="ec_same_day_pct">EC hari sama</th><th data-field="ec_same_week_pct" data-k="ec_same_week_pct">EC minggu sama</th><th data-field="sales_total" data-k="sales_total">Sales (Rp)</th><th data-field="pct_sales_same_day_ec" data-k="pct_sales_same_day_ec">% sales EC hari sama</th></tr></thead>
+      <tbody></tbody></table></div>
+  </div>
+
+  <div class="card" id="target-card">
+    <h2>Dealer bertarget yang belum belanja</h2>
+    <p class="note">Pasangan salesman + dealer yang punya target bulan ini (sheet Target) tapi belum ada billing dari salesman tersebut ke dealer itu sejak tanggal 1. Target terbesar di atas. <span class="bname">Semua brand</span>.</p>
+    <div class="tsum" id="target-sum"></div>
+    <input class="search" id="target-search" type="search" placeholder="Cari dealer atau salesman" aria-label="Cari dealer bertarget">
+    <div class="scroll"><table id="target-table" data-source="target_open" data-row-key="sales_id,dealer_code">
+      <thead><tr><th data-field="salesman" class="l" data-k="salesman">Salesman</th><th data-field="brand" class="l" data-k="brand">Brand</th><th data-field="dealer" class="l" data-k="dealer">Dealer</th><th data-field="target" data-k="target">Target (Rp)</th><th data-field="planned_visits" data-k="planned_visits">Plan kunjungan</th><th data-field="visit_call" data-k="visit_call">Visit + Call</th><th data-field="last_visit" class="l" data-k="last_visit">Kunjungan terakhir</th></tr></thead>
+      <tbody></tbody></table></div>
+    <p class="note" id="target-none" hidden>Tidak ada sheet Target di file yang di-upload. Tambahkan sheet bernama Target (kolom UNIQ SC, BP, Dealer Name, Brand, GRAND TOTAL) lalu upload lagi.</p>
+  </div>
+  </section>
+  </div>
+</div>
+</div>
+<script>
+// Minimal .xlsx reader: zip (stored/deflate) + sheet XML -> {sheetName: [rowObject, ...]}.
+// First row of each sheet = column names. Numbers (incl. Excel date serials) stay numbers.
+(function (root) {
+  const dec = new TextDecoder('utf-8');
+  const ent = (s) => s.replace(/&(lt|gt|amp|quot|apos|#x[0-9a-fA-F]+|#\d+);/g, (m, e) =>
+    e === 'lt' ? '<' : e === 'gt' ? '>' : e === 'amp' ? '&' : e === 'quot' ? '"' : e === 'apos' ? "'" :
+    String.fromCodePoint(e[1] === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)));
+
+  async function inflate(bytes) {
+    const ds = new DecompressionStream('deflate-raw');
+    const out = new Blob([bytes]).stream().pipeThrough(ds);
+    return new Uint8Array(await new Response(out).arrayBuffer());
+  }
+
+  async function unzip(buf) {
+    const u8 = new Uint8Array(buf), dv = new DataView(buf);
+    let eocd = -1;
+    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error('Ini bukan file .xlsx yang valid.');
+    const n = dv.getUint16(eocd + 10, true); let p = dv.getUint32(eocd + 16, true);
+    const files = {};
+    for (let k = 0; k < n; k++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('File .xlsx tampaknya rusak.');
+      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+      const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+      const name = dec.decode(u8.subarray(p + 46, p + 46 + nl));
+      files[name] = { method, csize, off };
+      p += 46 + nl + xl + cl;
+    }
+    const read = async (name) => {
+      const f = files[name]; if (!f) return null;
+      const lnl = dv.getUint16(f.off + 26, true), lxl = dv.getUint16(f.off + 28, true);
+      const data = u8.subarray(f.off + 30 + lnl + lxl, f.off + 30 + lnl + lxl + f.csize);
+      if (f.method === 0) return dec.decode(data);
+      if (f.method === 8) return dec.decode(await inflate(data));
+      throw new Error('Format kompresi file .xlsx tidak didukung.');
+    };
+    return { names: Object.keys(files), read };
+  }
+
+  const colIdx = (ref) => { let n = 0; for (const ch of ref) { const c = ch.charCodeAt(0); if (c < 65 || c > 90) break; n = n * 26 + (c - 64); } return n - 1; };
+  const attr = (s, a) => { const m = s.match(new RegExp('\\s' + a + '="([^"]*)"')); return m ? m[1] : null; };
+
+  async function readWorkbook(buf, wanted) {
+    const z = await unzip(buf);
+    const wbx = await z.read('xl/workbook.xml'); if (!wbx) throw new Error('File .xlsx ini tidak berisi workbook.');
+    const rels = (await z.read('xl/_rels/workbook.xml.rels')) || '';
+    const relMap = {};
+    for (const m of rels.matchAll(/<Relationship\b[^>]*>/g)) { const id = attr(m[0], 'Id'), t = attr(m[0], 'Target'); if (id && t) relMap[id] = t.replace(/^\/?xl\//, '').replace(/^\//, ''); }
+    const sheets = [];
+    for (const m of wbx.matchAll(/<sheet\b[^>]*>/g)) sheets.push({ name: ent(attr(m[0], 'name') || ''), target: 'xl/' + relMap[attr(m[0], 'r:id')] });
+    const ssx = (await z.read('xl/sharedStrings.xml')) || '';
+    const sst = [];
+    for (const m of ssx.matchAll(/<si>([\s\S]*?)<\/si>/g)) { let s = ''; for (const t of m[1].matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)) s += t[1]; sst.push(ent(s)); }
+    const out = { sheetNames: sheets.map((s) => s.name), rows: {} };
+    for (const sh of sheets) {
+      if (wanted && !wanted(sh.name)) continue;
+      const x = await z.read(sh.target); if (x == null) continue;
+      const grid = [];
+      for (const rm of x.matchAll(/<row\b[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)) {
+        const r = []; const body = rm[1] || '';
+        for (const cm of body.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+          const a = cm[1], inner = cm[2] || '', ref = attr(a, 'r'), t = attr(a, 't');
+          const ci = ref ? colIdx(ref) : r.length;
+          let v = null;
+          if (t === 'inlineStr') { let s = ''; for (const tm of inner.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)) s += tm[1]; v = ent(s); }
+          else { const vm = inner.match(/<v>([\s\S]*?)<\/v>/); if (vm) { const raw = vm[1]; v = t === 's' ? sst[+raw] : t === 'str' || t === 'e' ? ent(raw) : t === 'b' ? raw === '1' : Number(raw); } }
+          r[ci] = v;
+        }
+        const ri = attr(rm[0], 'r'); grid[ri ? +ri - 1 : grid.length] = r;
+      }
+      const head = (grid.find((g) => g && g.some((v) => v != null && v !== '')) || []);
+      const hi = grid.indexOf(head);
+      const cols = head.map((h) => (h == null ? null : String(h).trim()));
+      const rows = [];
+      for (let i = hi + 1; i < grid.length; i++) {
+        const g = grid[i]; if (!g || !g.some((v) => v != null && v !== '')) continue;
+        const o = {}; cols.forEach((c, j) => { if (c) o[c] = g[j] === undefined ? null : g[j]; }); rows.push(o);
+      }
+      out.rows[sh.name] = rows;
+    }
+    return out;
+  }
+  root.readXlsx = readWorkbook;
+  if (typeof module !== 'undefined') module.exports = { readWorkbook };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Effective Call calculation: three sheets of row objects (Excel serial dates) -> dashboard datasets.
+// Same rules as the Excel workbook (Visit Detail / Plan vs Actual / Billing Data tabs).
+(function (root) {
+  const BRANDS = ['Xiaomi', 'Samsung', 'Tecno', 'Apple'];
+  const REQ = {
+    plan: ['PJP Date', 'Brand', 'Sales ID', 'Sales Name', 'BP Code', 'Dealer'],
+    track: ['Tgl. Kunjungan', 'Uniq SC', 'Nama Sales', 'Aktivitas', 'Nama Dealer', 'Hasil Visit'],
+    bill: ['Billing Date', 'Billing Type', 'Uniqcode Salesman', 'Salesman Name', 'Sold to Party Code', 'Brand Name', 'Total Nett Amount No Tax']
+  };
+  const str = (v) => (v === null || v === undefined ? '' : String(v).trim());
+  const num = (v) => { const n = typeof v === 'number' ? v : Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
+  const day = (v) => Math.floor(num(v));
+  const iso = (s) => { const d = new Date(Math.round((s - 25569) * 864e5)); return d.toISOString().slice(0, 10); };
+  const wd = (s) => (s + 5) % 7; // Monday = 0 for Excel serials
+  const titleCase = (s) => s.toLowerCase().replace(/(^|[^a-z])([a-z])/g, (m, a, b) => a + b.toUpperCase());
+  const mode = (arr) => { const c = new Map(); arr.forEach((x) => c.set(x, (c.get(x) || 0) + 1)); let best = null, n = -1; [...c.keys()].sort().forEach((k) => { if (c.get(k) > n) { n = c.get(k); best = k; } }); return best; };
+  const ratio = (a, b) => (b ? a / b : 0);
+  const sum = (arr, f) => arr.reduce((t, x) => t + f(x), 0);
+
+  function checkColumns(rows, need, label) {
+    if (!rows.length) return [`Sheet "${label}" tidak berisi data.`];
+    const have = new Set(Object.keys(rows[0]));
+    rows.slice(0, 50).forEach((r) => Object.keys(r).forEach((k) => have.add(k)));
+    const miss = need.filter((c) => !have.has(c));
+    return miss.length ? [`Sheet "${label}" tidak memiliki kolom: ${miss.join(', ')}.`] : [];
+  }
+
+  function compute(input) {
+    const errs = [...checkColumns(input.plan, REQ.plan, 'Plan Visit'), ...checkColumns(input.track, REQ.track, 'Data Tracking Visit'), ...checkColumns(input.bill, REQ.bill, 'Billing Sales')];
+    if (errs.length) throw new Error(errs.join(' '));
+
+    // ---- billing: cut-off = latest Billing Date; month = the cut-off's month
+    let B = input.bill.filter((r) => num(r['Billing Date']) > 0).map((r) => ({
+      d: day(r['Billing Date']), type: str(r['Billing Type']), sid: str(r['Uniqcode Salesman']), sname: str(r['Salesman Name']),
+      dealer: str(r['Sold to Party Code']), pbrand: str(r['Brand Name']), net: num(r['Total Nett Amount No Tax'])
+    }));
+    if (!B.length) throw new Error('Tidak ada baris billing yang punya Billing Date.');
+    const cutoff = Math.max(...B.map((r) => r.d));
+    const cd = new Date(Math.round((cutoff - 25569) * 864e5));
+    const m0 = Math.round(Date.UTC(cd.getUTCFullYear(), cd.getUTCMonth(), 1) / 864e5) + 25569;
+    const inP = (d) => d >= m0 && d <= cutoff;
+    B = B.filter((r) => inP(r.d));
+    const mon0 = m0 - wd(m0);
+    const week = (d) => 'W' + (Math.floor((d - wd(d) - mon0) / 7) + 1);
+
+    const P = input.plan.filter((r) => num(r['PJP Date']) > 0 && inP(day(r['PJP Date']))).map((r, i) => ({
+      i, d: day(r['PJP Date']), brand: str(r['Brand']), sid: str(r['Sales ID']), sname: str(r['Sales Name']), dealer: str(r['BP Code']), dname: str(r['Dealer'])
+    }));
+    const T = input.track.filter((r) => num(r['Tgl. Kunjungan']) > 0 && inP(day(r['Tgl. Kunjungan']))).map((r, i) => {
+      const nd = str(r['Nama Dealer']), sc = str(r['Uniq SC']);
+      const left8 = nd.slice(0, 8);
+      return {
+        i, t: num(r['Tgl. Kunjungan']), d: day(r['Tgl. Kunjungan']), sc, sid: sc || '(no ID)', sname: str(r['Nama Sales']),
+        act: str(r['Aktivitas']) || '(blank)', dealer: sc ? left8 : (/^\d{8}/.test(nd) ? left8 : ''),
+        dname: nd.replace(/^\d{8}\s*/, ''), hasil: str(r['Hasil Visit']) || '(blank)', key: day(r['Tgl. Kunjungan']) + sc + left8
+      };
+    });
+    P.forEach((p) => { p.key = p.d + p.sid + p.dealer; p.w = week(p.d); });
+    T.forEach((t) => { t.w = week(t.d); t.wk = t.w + t.sid + t.dealer; });
+    B.forEach((b) => { b.key = b.d + b.sid + b.dealer; b.w = week(b.d); b.wk = b.w + b.sid + b.dealer; });
+
+    // ---- salesman name + brand
+    const nm = new Map();
+    const addN = (id, n) => { if (!id || !n) return; if (!nm.has(id)) nm.set(id, []); nm.get(id).push(n); };
+    P.forEach((p) => addN(p.sid, p.sname)); T.forEach((t) => { if (t.sc) addN(t.sid, t.sname); }); B.forEach((b) => addN(b.sid, b.sname));
+    const names = new Map([...nm].map(([k, v]) => [k, mode(v)]));
+    const bm = new Map(), pb = new Map(), bb = new Map();
+    P.forEach((p) => { if (!pb.has(p.sid)) pb.set(p.sid, []); pb.get(p.sid).push(p.brand); });
+    B.forEach((b) => { if (!bb.has(b.sid)) bb.set(b.sid, []); bb.get(b.sid).push(b.pbrand); });
+    pb.forEach((v, k) => bm.set(k, mode(v)));
+    bb.forEach((v, k) => { if (!bm.has(k)) bm.set(k, titleCase(mode(v))); });
+    const brandOf = (sid) => bm.get(sid) || (sid === '(no ID)' ? '(no Sales ID)' : '(ID not in Plan/Billing)');
+    const nameOf = (sid, fb) => names.get(sid) || fb || sid;
+    T.forEach((t) => { t.brand = brandOf(t.sid); t.name = t.sc ? nameOf(t.sid, t.sname) : (t.sname || '(blank)'); });
+    B.forEach((b) => { b.sbrand = bm.get(b.sid) || ''; });
+
+    // ---- sales lookups (ZF2)
+    const S = B.filter((b) => b.type === 'ZF2');
+    const byKey = new Map(), byWk = new Map();
+    S.forEach((b) => { byKey.set(b.key, (byKey.get(b.key) || 0) + b.net); if (!byWk.has(b.wk)) byWk.set(b.wk, []); byWk.get(b.wk).push(b); });
+    const planKeys = new Set(P.map((p) => p.key));
+    const planSDW = new Set(P.map((p) => p.sid + '|' + p.dealer + '|' + p.w));
+    const planSD = new Set(P.map((p) => p.sid + '|' + p.dealer));
+
+    // ---- Visit/Call rows
+    const V = T.filter((t) => t.act === 'Visit' || t.act === 'Call');
+    const seenPlanned = new Map();
+    V.forEach((v) => {
+      v.planned = planKeys.has(v.key);
+      v.sd = byKey.get(v.key) || 0;
+      const wkSales = byWk.get(v.wk) || [];
+      v.sw = sum(wkSales, (b) => b.net);
+      v.before = sum(wkSales.filter((b) => b.d < v.d), (b) => b.net);
+      v.after = sum(wkSales.filter((b) => b.d > v.d), (b) => b.net);
+      v.ecd = v.sd > 0 ? 1 : 0; v.ecw = v.sw > 0 ? 1 : 0; v.fwd = v.sd + v.after > 0 ? 1 : 0;
+      if (v.planned) { const n = (seenPlanned.get(v.key) || 0) + 1; seenPlanned.set(v.key, n); v.extra = n > 1 ? 1 : 0; } else v.extra = 0;
+      v.utype = v.planned ? '' : planSDW.has(v.sid + '|' + v.dealer + '|' + v.w) ? 'Moved day (same week)' : planSD.has(v.sid + '|' + v.dealer) ? 'Planned in other week' : 'Not in plan';
+    });
+    const vByWk = new Map();
+    V.forEach((v) => { if (!vByWk.has(v.wk)) vByWk.set(v.wk, []); vByWk.get(v.wk).push(v); });
+    V.forEach((v) => {
+      if (v.utype !== 'Moved day (same week)') { v.msub = ''; return; }
+      const earlier = vByWk.get(v.wk).filter((x) => x.t < v.t);
+      v.msub = earlier.some((x) => x.planned) ? 'Revisit after planned visit' : earlier.some((x) => !x.planned) ? 'Revisit after unplanned visit' : 'First visit of the week';
+    });
+    const vcKeys = new Set(V.map((v) => v.key));
+    const allTrkKeys = new Set(T.map((t) => t.key));
+    const allTrkWk = new Set(T.map((t) => t.wk));
+    const unplWk = new Set(V.filter((v) => !v.planned).map((v) => v.wk));
+    B.forEach((b) => {
+      b.q = allTrkKeys.has(b.key) ? 1 : 0; b.r = allTrkWk.has(b.wk) ? 1 : 0; b.tu = unplWk.has(b.wk) ? 1 : 0;
+      const vs = (vByWk.get(b.wk) || []).filter((v) => v.d <= b.d);
+      b.timing = b.r ? (vs.length ? 'On/after visit' : 'Before visit') : '';
+      b.since = b.timing === 'On/after visit' ? b.d - Math.max(...vs.map((v) => v.d)) : null;
+    });
+    // plan execution
+    const vcBySDW = new Set(V.map((v) => v.sid + '|' + v.dealer + '|' + v.w));
+    P.forEach((p) => { p.exec = vcKeys.has(p.key); p.sameWeek = vcBySDW.has(p.sid + '|' + p.dealer + '|' + p.w); });
+
+    // ---- aggregates
+    const sub = (arr, f, br) => (br === 'All' ? arr : arr.filter((x) => f(x) === br));
+    const S2 = B.filter((b) => b.type === 'ZF2');
+    const kpi = ['All', ...BRANDS].map((br) => {
+      const v = sub(V, (x) => x.brand, br), p = sub(P, (x) => x.brand, br), s = sub(S2, (x) => x.sbrand, br);
+      const st = sum(s, (x) => x.net), sd = sum(s.filter((x) => x.q), (x) => x.net), sw = sum(s.filter((x) => x.r), (x) => x.net);
+      const ex = p.filter((x) => x.exec).length;
+      return {
+        brand: br, planned: p.length, executed: ex, compliance: ratio(ex, p.length), visited_same_week: p.filter((x) => x.sameWeek).length,
+        visit_call: v.length, visits: v.filter((x) => x.act === 'Visit').length, calls: v.filter((x) => x.act === 'Call').length,
+        extra: sum(v, (x) => x.extra), unplanned: v.filter((x) => !x.planned).length,
+        ec_same_day: sum(v, (x) => x.ecd), ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length),
+        ec_same_week: sum(v, (x) => x.ecw), ec_same_week_pct: ratio(sum(v, (x) => x.ecw), v.length),
+        ec_forward: sum(v, (x) => x.fwd), ec_forward_pct: ratio(sum(v, (x) => x.fwd), v.length),
+        sales_total: st, sales_same_day_ec: sd, sales_same_week_ec: sw, pct_sales_same_day_ec: ratio(sd, st), pct_sales_same_week_ec: ratio(sw, st)
+      };
+    });
+    const weeks = [...new Set([...P, ...V, ...S2].map((x) => x.w))].sort((a, b) => num(a.slice(1)) - num(b.slice(1)));
+    const weekRange = weeks.map((w) => {
+      const k = num(w.slice(1)) - 1, a = Math.max(m0, mon0 + 7 * k), b = Math.min(cutoff, mon0 + 7 * k + 6);
+      return { week: w, from: iso(a), to: iso(b) };
+    });
+    const weekly = [];
+    ['All', ...BRANDS].forEach((br) => weeks.forEach((w) => {
+      const v = sub(V, (x) => x.brand, br).filter((x) => x.w === w), p = sub(P, (x) => x.brand, br).filter((x) => x.w === w), s = sub(S2, (x) => x.sbrand, br).filter((x) => x.w === w);
+      const st = sum(s, (x) => x.net);
+      weekly.push({ brand: br, week: w, compliance: ratio(p.filter((x) => x.exec).length, p.length), visit_call: v.length,
+        ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length), ec_same_week_pct: ratio(sum(v, (x) => x.ecw), v.length),
+        sales_total: st, pct_sales_same_day_ec: ratio(sum(s.filter((x) => x.q), (x) => x.net), st) });
+    }));
+    const TYPES = [['Planned visit', (v) => v.planned], ['Moved day: visited as planned, again', (v) => v.msub === 'Revisit after planned visit'],
+      ['Moved day: visited off-plan, again', (v) => v.msub === 'Revisit after unplanned visit'], ['Moved day: first visit of week', (v) => v.msub === 'First visit of the week'],
+      ['Planned in other week', (v) => v.utype === 'Planned in other week'], ['Not in plan', (v) => v.utype === 'Not in plan']];
+    const unplanned = [];
+    ['All', ...BRANDS].forEach((br) => TYPES.forEach(([lab, f], k) => {
+      const x = sub(V, (y) => y.brand, br).filter(f);
+      unplanned.push({ brand: br, type: lab, order: k, visit_call: x.length, ec_same_day_pct: ratio(sum(x, (y) => y.ecd), x.length), ec_same_week_pct: ratio(sum(x, (y) => y.ecw), x.length) });
+    }));
+    const BK = [['Before visit', (s) => s.timing === 'Before visit'], ['Visit day', (s) => s.since === 0], ['+1 day', (s) => s.since === 1], ['+2 days', (s) => s.since === 2], ['+3 days', (s) => s.since === 3], ['+4–6 days', (s) => s.since !== null && s.since >= 4]];
+    const timing = [];
+    ['All', ...BRANDS].forEach((br) => {
+      const s = sub(S2, (x) => x.sbrand, br), tot = sum(s.filter((x) => x.r), (x) => x.net);
+      BK.forEach(([lab, f], k) => { const v = sum(s.filter(f), (x) => x.net); timing.push({ brand: br, billed: lab, order: k, sales: v, share: ratio(v, tot) }); });
+    });
+    const sids = [...new Set([...P.map((p) => p.sid), ...V.map((v) => v.sid)])].filter((x) => x.startsWith('ID')).sort();
+    const salesmen = [];
+    sids.forEach((sid) => {
+      const p = P.filter((x) => x.sid === sid), v = V.filter((x) => x.sid === sid), s = S2.filter((x) => x.sid === sid);
+      if (!p.length && !v.length) return;
+      const st = sum(s, (x) => x.net);
+      salesmen.push({ sales_id: sid, salesman: nameOf(sid), brand: brandOf(sid), planned: p.length, executed: p.filter((x) => x.exec).length, extra: sum(v, (x) => x.extra), ec_forward_pct: ratio(sum(v, (x) => x.fwd), v.length), compliance: ratio(p.filter((x) => x.exec).length, p.length),
+        visit_call: v.length, unplanned: v.filter((x) => !x.planned).length, ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length),
+        ec_same_week_pct: ratio(sum(v, (x) => x.ecw), v.length), sales_total: st, sales_same_day_ec: sum(s.filter((x) => x.q), (x) => x.net), pct_sales_same_day_ec: ratio(sum(s.filter((x) => x.q), (x) => x.net), st) });
+    });
+
+    // ---- per-salesman rows for the charts (salesman filter)
+    salesmen.forEach((sm) => {
+      const sid = sm.sales_id, vS = V.filter((x) => x.sid === sid), pS = P.filter((x) => x.sid === sid), sS = S2.filter((x) => x.sid === sid);
+      weeks.forEach((w) => {
+        const v = vS.filter((x) => x.w === w), p = pS.filter((x) => x.w === w), s = sS.filter((x) => x.w === w), st = sum(s, (x) => x.net);
+        weekly.push({ brand: sm.brand, sales_id: sid, week: w, compliance: ratio(p.filter((x) => x.exec).length, p.length), visit_call: v.length,
+          ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length), ec_same_week_pct: ratio(sum(v, (x) => x.ecw), v.length),
+          sales_total: st, pct_sales_same_day_ec: ratio(sum(s.filter((x) => x.q), (x) => x.net), st) });
+      });
+      TYPES.forEach(([lab, f], k) => { const x = vS.filter(f); unplanned.push({ brand: sm.brand, sales_id: sid, type: lab, order: k, visit_call: x.length, ec_same_day_pct: ratio(sum(x, (y) => y.ecd), x.length), ec_same_week_pct: ratio(sum(x, (y) => y.ecw), x.length) }); });
+      const tot = sum(sS.filter((x) => x.r), (x) => x.net);
+      BK.forEach(([lab, f], k) => { const v = sum(sS.filter(f), (x) => x.net); timing.push({ brand: sm.brand, sales_id: sid, billed: lab, order: k, sales: v, share: ratio(v, tot) }); });
+    });
+    const cg = new Map();
+    V.filter((v) => !v.planned).forEach((v) => {
+      const k = v.sid + '|' + v.dealer; if (!cg.has(k)) cg.set(k, { sid: v.sid, dealer: v.dealer, dname: v.dname, n: 0, ecw: 0 });
+      const g = cg.get(k); g.n++; g.ecw += v.ecw;
+    });
+    const candidates = [...cg.values()].filter((g) => g.ecw > 0 && !planSD.has(g.sid + '|' + g.dealer)).map((g) => ({
+      sales_id: g.sid, salesman: nameOf(g.sid), brand: bm.get(g.sid) || '', dealer_code: g.dealer, dealer: g.dname, unplanned_visits: g.n, effective_same_week: g.ecw,
+      sales: sum(S2.filter((b) => b.sid === g.sid && b.dealer === g.dealer && b.tu), (b) => b.net)
+    })).sort((a, b) => b.sales - a.sales);
+
+
+    // ---- target dealers with no purchase yet (optional Target sheet)
+    let target_open = [], target_meta = { has_target: false };
+    if (input.target && input.target.length) {
+      const need = ['UNIQ SC', 'BP', 'Brand', 'GRAND TOTAL'];
+      const tm = checkColumns(input.target, need, 'Target'); if (tm.length) throw new Error(tm.join(' '));
+      const monthOf = (s) => { const d = new Date(Math.round((s - 25569) * 864e5)); return d.getUTCFullYear() * 12 + d.getUTCMonth(); };
+      const mNow = monthOf(m0);
+      const Tg = input.target.filter((r) => num(r['GRAND TOTAL']) > 0 && (!num(r['Date']) || monthOf(day(r['Date'])) === mNow)).map((r) => ({
+        sid: str(r['UNIQ SC']), sname: str(r['SC NAME']), dealer: str(r['BP']), dname: str(r['Dealer Name']), brand: titleCase(str(r['Brand'])), target: num(r['GRAND TOTAL'])
+      }));
+      const bought = new Set(S2.filter((b) => b.net > 0).map((b) => b.sid + '|' + b.dealer));
+      const vis = new Map(), pl = new Map();
+      V.forEach((v) => { const k = v.sid + '|' + v.dealer; const g = vis.get(k) || { n: 0, last: 0 }; g.n++; g.last = Math.max(g.last, v.d); vis.set(k, g); });
+      P.forEach((p) => { const k = p.sid + '|' + p.dealer; pl.set(k, (pl.get(k) || 0) + 1); });
+      const agg = new Map();
+      Tg.forEach((t) => { const k = t.sid + '|' + t.dealer; const g = agg.get(k); if (g) { g.target += t.target; if (!g.brands.includes(t.brand)) g.brands.push(t.brand); } else agg.set(k, { ...t, brands: [t.brand] }); });
+      const all = [...agg.values()];
+      target_open = all.filter((t) => !bought.has(t.sid + '|' + t.dealer)).map((t) => {
+        const k = t.sid + '|' + t.dealer, g = vis.get(k);
+        return { sales_id: t.sid, salesman: names.get(t.sid) || t.sname, brand: t.brands.join(', '), dealer_code: t.dealer, dealer: t.dname, target: t.target,
+          planned_visits: pl.get(k) || 0, visit_call: g ? g.n : 0, last_visit: g ? iso(g.last) : '' };
+      }).sort((a, b) => b.target - a.target);
+      const tb = ['All', ...BRANDS].map((br) => { const a = sub(all, (x) => x.brand, br), o = sub(target_open, (x) => x.brand, br);
+        return { brand: br, dealers: a.length, target: sum(a, (x) => x.target), open_dealers: o.length, open_target: sum(o, (x) => x.target), open_not_visited: o.filter((x) => !x.visit_call).length }; });
+      target_meta = { has_target: true, rows: Tg.length, by_brand: tb };
+    }
+    // ---- latest billing day
+    const L = cutoff, Lv = V.filter((v) => v.d === L), Lp = P.filter((p) => p.d === L), Ls = S2.filter((s) => s.d === L);
+    const daily_brand = ['All', ...BRANDS].map((br) => {
+      const v = sub(Lv, (x) => x.brand, br), p = sub(Lp, (x) => x.brand, br), s = sub(Ls, (x) => x.sbrand, br);
+      const ex = p.filter((x) => x.exec).length, st = sum(s, (x) => x.net), sd = sum(s.filter((x) => x.q), (x) => x.net);
+      return { date: iso(L), brand: br, planned: p.length, executed: ex, missed: p.length - ex, compliance: ratio(ex, p.length), extra: sum(v, (x) => x.extra), visit_call: v.length,
+        unplanned: v.filter((x) => !x.planned).length, ec_same_day: sum(v, (x) => x.ecd), ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length),
+        sales_total: st, sales_same_day_ec: sd, pct_sales_same_day_ec: ratio(sd, st) };
+    });
+    const daily_salesman = [...new Set([...Lv.map((v) => v.sid), ...Lp.map((p) => p.sid)])].sort().map((sid) => {
+      const v = Lv.filter((x) => x.sid === sid), p = Lp.filter((x) => x.sid === sid), s = Ls.filter((x) => x.sid === sid);
+      const ex = p.filter((x) => x.exec).length;
+      return { date: iso(L), sales_id: sid, salesman: sid === '(no ID)' ? '(no Sales ID)' : nameOf(sid, (p[0] || {}).sname), brand: p.length ? p[0].brand : brandOf(sid),
+        planned: p.length, executed: ex, missed: p.length - ex, compliance: ratio(ex, p.length), extra: sum(v, (x) => x.extra), visit_call: v.length, unplanned: v.filter((x) => !x.planned).length,
+        ec_same_day: sum(v, (x) => x.ecd), ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length),
+        sales_same_day_ec: sum(s.filter((x) => x.q), (x) => x.net), sales_total: sum(s, (x) => x.net), pct_sales_same_day_ec: ratio(sum(s.filter((x) => x.q), (x) => x.net), sum(s, (x) => x.net)) };
+    });
+    const hhmm = (t) => { const m = Math.floor(Math.round((t - Math.floor(t)) * 86400) / 60); return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+
+    // ---- extra check-ins: 2nd+ Visit/Call on a planned dealer-day (ordered by check-in time)
+    const byPK = new Map();
+    V.filter((v) => v.planned).forEach((v) => { if (!byPK.has(v.key)) byPK.set(v.key, []); byPK.get(v.key).push(v); });
+    const extra_checkins = [];
+    byPK.forEach((arr) => {
+      if (arr.length < 2) return;
+      arr.sort((a, b) => a.t - b.t);
+      arr.forEach((v, i) => { v.extraT = i > 0; });
+      arr.slice(1).forEach((v, i) => extra_checkins.push({
+        id: v.key + '#' + (i + 2), date: iso(v.d), sales_id: v.sid, salesman: v.name, brand: v.brand, dealer_code: v.dealer, dealer: v.dname,
+        nth: i + 2, first_time: hhmm(arr[0].t), time: hhmm(v.t), gap_min: Math.round((v.t - arr[0].t) * 1440), first_activity: arr[0].act, activity: v.act,
+        hasil_visit: v.hasil, effective_same_day: v.ecd ? 'Yes' : 'No'
+      }));
+    });
+    extra_checkins.sort((a, b) => b.date.localeCompare(a.date) || a.salesman.localeCompare(b.salesman) || a.time.localeCompare(b.time));
+    const daily_visits = Lv.slice().sort((a, b) => a.t - b.t).map((v, k) => ({
+      visit_id: 'V' + String(k + 1).padStart(4, '0'), date: iso(L), time: hhmm(v.t), sales_id: v.sid, salesman: v.name, brand: v.brand,
+      dealer_code: v.dealer, dealer: v.dname, activity: v.act, plan_status: v.planned ? (v.extraT ? 'Extra check-in' : 'Planned') : (v.msub || v.utype), hasil_visit: v.hasil,
+      same_day_sales: v.sd, effective_same_day: v.ecd ? 'Yes' : 'No'
+    }));
+    const seen = new Map();
+    const daily_missed = Lp.filter((p) => !p.exec).map((p) => {
+      const n = (seen.get(p.key) || 0) + 1; seen.set(p.key, n);
+      return { plan_key: n > 1 ? p.key + '#' + n : p.key, date: iso(L), sales_id: p.sid, salesman: p.sname || nameOf(p.sid), brand: p.brand, dealer_code: p.dealer, dealer: p.dname, visited_same_week: p.sameWeek ? 'Yes' : 'No' };
+    });
+
+    const meta = {
+      period_start: iso(m0), latest_billing_date: iso(cutoff), weeks: weekRange,
+      rows: { plan: P.length, tracking: T.length, billing: B.length },
+      ignored: { plan: input.plan.length - P.length, tracking: input.track.length - T.length, billing: input.bill.length - B.length }
+    };
+    meta.target = target_meta;
+    return { meta, kpi, weekly, unplanned, timing, salesmen, candidates, target_open, extra_checkins, daily_brand, daily_salesman, daily_visits, daily_missed };
+  }
+  root.ecCompute = compute;
+  root.ecRequired = REQ;
+  if (typeof module !== 'undefined') module.exports = { compute, REQ };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Small stand-in for the data layer: the page's charts read results through dash.data(id).
+window.dash = (function () {
+  let state = { status: 'loading', result: null };
+  let params = { brand: 'All', tab: 'daily', salesman: null };
+  const fns = [];
+  // show the chosen tab first, so its charts are visible (and get a width) when they draw
+  const showTab = () => { const t = params.tab || 'daily', d = document.getElementById('daily'), m = document.getElementById('mtd'); if (d) d.hidden = t !== 'daily'; if (m) m.hidden = t !== 'mtd'; };
+  const run = () => { showTab(); fns.forEach((f) => { try { f(); } catch (e) { console.error(e); } }); };
+  let t = null, lastW = 0;
+  new ResizeObserver((es) => { const w = Math.round(es[0].contentRect.width); if (w === lastW) return; lastW = w; clearTimeout(t); t = setTimeout(run, 120); }).observe(document.documentElement);
+  return {
+    colors: ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)'],
+    data(id) {
+      if (state.status !== 'ok') return { status: state.status, data: [], columns: [] };
+      const d = state.result[id] || [];
+      return { status: 'ok', data: d, columns: d.length ? Object.keys(d[0]) : [] };
+    },
+    result() { return state.result; },
+    onData(fn) { fns.push(fn); try { fn(); } catch (e) { console.error(e); } },
+    params() { return { ...params }; },
+    setParams(o) { params = { ...params, ...o }; run(); },
+    _set(s) { state = s; run(); }
+  };
+})();
+</script>
+<script>
+(function () {
+  d3.timeFormatDefaultLocale({ dateTime: '%A, %e %B %Y %X', date: '%d/%m/%Y', time: '%H:%M:%S', periods: ['AM', 'PM'],
+    days: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'], shortDays: ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'],
+    months: ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'],
+    shortMonths: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'] });
+  // display labels for values the calculation produces
+  const TR = { 'Planned visit': 'Kunjungan sesuai plan', 'Moved day: visited as planned, again': 'Pindah hari: sudah dikunjungi sesuai plan, dikunjungi lagi', 'Moved day: visited off-plan, again': 'Pindah hari: sudah dikunjungi di luar plan, dikunjungi lagi', 'Moved day: first visit of week': 'Pindah hari: kunjungan pertama minggu itu',
+    'Planned in other week': 'Di-plan di minggu lain', 'Not in plan': 'Tidak ada di plan', 'Planned': 'Sesuai plan', 'Extra check-in': 'Check-in tambahan', 'Revisit after planned visit': 'Pindah hari: kunjungan ulang setelah sesuai plan', 'Revisit after unplanned visit': 'Pindah hari: kunjungan ulang setelah di luar plan', 'First visit of the week': 'Pindah hari: kunjungan pertama minggu itu',
+    'Before visit': 'Sebelum kunjungan', 'Visit day': 'Hari kunjungan', '+1 day': '+1 hari', '+2 days': '+2 hari', '+3 days': '+3 hari', '+4–6 days': '+4–6 hari', 'Yes': 'Ya', 'No': 'Tidak' };
+  window.ecT = (v) => (v in TR ? TR[v] : v);
+  const BRANDS = ['All', 'Xiaomi', 'Samsung', 'Tecno', 'Apple'];
+  const pct = d3.format('.1%'), int = d3.format(','), rpB = (v) => d3.format(',.0f')(v), rpM = (v) => d3.format(',.0f')(v);
+  const enc = (s) => encodeURIComponent(String(s));
+  const brandNow = () => dash.params().brand || 'All';
+  const setBrand = (b) => dash.setParams({ brand: b, salesman: null });
+  const smId = () => { const v = dash.params().salesman; return v ? v.split('|')[0] : null; };
+  const smName = () => { const v = dash.params().salesman; return v ? v.split('|').slice(1).join('|') : null; };
+  const pickRows = (rows, b) => { const id = smId(); return id ? rows.filter((r) => r.sales_id === id) : rows.filter((r) => r.brand === b && !r.sales_id); };
+  const label = (b) => smName() || (b === 'All' ? 'Semua brand' : b);
+  // EC target: 50% of Visit + Call bring billing the same day
+  const EC_TARGET = 0.5;
+  const ecTarget = (r) => {
+    if (!r || !r.visit_call) return { ok: null, text: 'Target ' + pct(EC_TARGET).replace('.0%', '%') + ' · belum ada Visit/Call' };
+    const ec = r.ec_same_day != null ? r.ec_same_day : Math.round(r.ec_same_day_pct * r.visit_call);
+    const need = Math.max(0, Math.ceil(EC_TARGET * r.visit_call - 1e-9) - ec);
+    return need === 0 ? { ok: true, text: 'Target 50% tercapai' } : { ok: false, text: 'Target 50% · kurang ' + int(need) + ' EC' };
+  };
+  const tgtClass = (v) => (v >= EC_TARGET ? 'good' : 'bad');
+  window.ecFmt = { pct, int, rpB, rpM, enc, brandNow, setBrand, smId, smName, pickRows, label, EC_TARGET, ecTarget, tgtClass };
+
+  // salesman picker
+  const smSel = document.getElementById('sm-filter');
+  smSel.addEventListener('change', () => dash.setParams({ salesman: smSel.value || null }));
+
+  // brand chips
+  const bf = document.getElementById('brand-filter');
+  BRANDS.forEach((b) => {
+    const btn = document.createElement('button');
+    btn.className = 'chip'; btn.type = 'button'; btn.textContent = b === 'All' ? 'Semua brand' : b; btn.dataset.brand = b;
+    btn.addEventListener('click', () => setBrand(b));
+    bf.appendChild(btn);
+  });
+
+  // KPI tiles (markup built once, filled in onData)
+  const TILES = [
+    ['planned', 'Total plan', null, 'Kunjungan dealer di PJP'],
+    ['compliance', 'Kepatuhan plan', null, 'Plan terlaksana di hari plan'],
+    ['ec_same_day_pct', 'EC hari sama', null, 'Visit/Call dengan billing di hari yang sama'],
+    ['sales_same_day_ec', 'Sales dari EC hari sama', null, ''],
+    ['pct_sales_same_day_ec', '% sales dari EC hari sama', null, 'Sales EC hari sama ÷ total sales'],
+    ['ec_same_week_pct', 'EC minggu sama', null, 'Billing di minggu yang sama (Sen–Min)'],
+    ['ec_forward_pct', 'EC setelah visit', null, 'Billing di hari kunjungan atau sesudahnya, minggu sama'],
+    ['extra', 'Check-in tambahan', null, 'Check-in ke-2 dst. pada plan yang terlaksana'],
+    ['visit_call', 'Visit + Call', null, 'Terlaksana + Tambahan + Di luar plan']
+  ];
+  const tiles = document.getElementById('kpis');
+  TILES.forEach(([f, lab, sepF, hint]) => {
+    const d = document.createElement('div'); d.className = 'tile'; d.id = 'tile-' + f;
+    const l = document.createElement('div'); l.className = 'lab'; l.textContent = lab;
+    const v = document.createElement('div'); v.className = 'val dash-skeleton'; v.textContent = '—';
+    v.dataset.source = 'kpi'; v.dataset.field = f; v.dataset.where = 'brand=All';
+    const c = document.createElement('div'); c.className = 'cmp';
+    if (sepF) {
+      c.append('1–20 Sep: ');
+      const s = document.createElement('span'); s.textContent = '—'; s.dataset.source = 'kpi'; s.dataset.field = sepF; s.dataset.where = 'brand=All';
+      c.append(s);
+    } else if (f === 'sales_same_day_ec') {
+      c.append('dari total sales Rp ');
+      const s = document.createElement('span'); s.textContent = '—'; s.dataset.source = 'kpi'; s.dataset.field = 'sales_total'; s.dataset.where = 'brand=All';
+      c.append(s);
+    } else c.textContent = hint;
+    d.append(l, v, c);
+    if (f === 'ec_same_day_pct') { const t = document.createElement('div'); t.className = 'tgt'; t.id = 'tgt-mtd'; d.append(t); }
+    tiles.append(d);
+  });
+
+  dash.onData(() => {
+    const b = brandNow();
+    document.querySelectorAll('#brand-filter .chip').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.brand === b)));
+    document.querySelectorAll('.ec .bname, .ec .tb').forEach((x) => { x.textContent = label(b); });
+    const sd = dash.data('salesmen'), sid = smId();
+    if (sd.status === 'ok') {
+      const opts = sd.data.filter((r) => b === 'All' || r.brand === b).slice().sort((a, c) => String(a.salesman).localeCompare(String(c.salesman)));
+      const vals = opts.map((r) => r.sales_id + '|' + r.salesman);
+      const cur = dash.params().salesman;
+      if (cur && !vals.includes(cur)) { const o = cur.split('|'); opts.unshift({ sales_id: o[0], salesman: o.slice(1).join('|') }); vals.unshift(cur); }
+      smSel.replaceChildren(new Option('Semua salesman', ''), ...opts.map((r, i) => new Option(r.salesman + (b === 'All' && r.brand ? ' · ' + r.brand : ''), vals[i])));
+      smSel.value = cur || '';
+    }
+    const k = dash.data('kpi');
+    const row = sid ? (sd.status === 'ok' ? sd.data.find((r) => r.sales_id === sid) : null) : (k.status === 'ok' ? k.data.find((r) => r.brand === b) : null);
+    document.querySelectorAll('[data-source="kpi"][data-field]').forEach((el) => {
+      if (el.closest('#brand-table') || el.closest('#daily')) return;
+      el.dataset.where = 'brand=' + enc(b);
+      el.classList.toggle('dash-skeleton', k.status === 'loading');
+      if (!row) { el.textContent = '—'; return; }
+      const f = el.dataset.field, v = row[f];
+      el.textContent = ['visit_call', 'planned', 'extra'].includes(f) ? int(v) : f === 'sales_same_day_ec' ? 'Rp ' + rpM(v) : f === 'sales_total' ? rpM(v) : pct(v);
+    });
+    const tg = ecTarget(row), tEl = document.getElementById('tgt-mtd'), vEl = document.querySelector('#tile-ec_same_day_pct .val');
+    tEl.textContent = row ? tg.text : ''; tEl.className = 'tgt' + (tg.ok === true ? ' good' : tg.ok === false ? ' bad' : '');
+    vEl.style.color = row && tg.ok !== null ? (tg.ok ? 'var(--color-ok)' : 'var(--color-bad)') : '';
+  });
+})();
+</script>
+<script>
+(function () {
+  const { pct, int, rpB, enc, brandNow, setBrand } = window.ecFmt;
+  const tb = document.querySelector('#brand-table tbody');
+  tb.addEventListener('click', (e) => { const tr = e.target.closest('tr[data-key]'); if (tr) setBrand(tr.dataset.key); });
+  dash.onData(() => {
+    const k = dash.data('kpi'); tb.replaceChildren();
+    if (k.status !== 'ok') return;
+    const b = brandNow();
+    k.data.forEach((r) => {
+      const tr = document.createElement('tr'); tr.dataset.key = r.brand; tr.className = 'click' + (r.brand === b ? ' sel' : '');
+      [r.brand === 'All' ? 'Semua' : r.brand, int(r.planned), pct(r.compliance), int(r.executed), int(r.extra), int(r.unplanned), int(r.visit_call), pct(r.ec_same_day_pct), pct(r.ec_same_week_pct), pct(r.ec_forward_pct), pct(r.pct_sales_same_day_ec), rpB(r.sales_total)]
+        .forEach((t, i) => { const td = document.createElement('td'); td.textContent = t; if (i === 7) td.className = tgtClass(r.ec_same_day_pct); tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+  });
+})();
+</script>
+<script>
+(function () {
+  const { pct, brandNow } = window.ecFmt;
+  const box = document.getElementById('weekly-chart'), leg = document.getElementById('weekly-legend');
+  const S = [['compliance', 'Kepatuhan plan'], ['ec_same_day_pct', 'EC hari sama'], ['ec_same_week_pct', 'EC minggu sama'], ['pct_sales_same_day_ec', '% sales EC hari sama']];
+  leg.replaceChildren(...S.map(([, n], i) => { const s = document.createElement('span'); const sw = document.createElement('i'); sw.style.background = dash.colors[i]; s.append(sw, n); return s; }));
+  dash.onData(() => {
+    const d = dash.data('weekly'); box.replaceChildren();
+    if (box.closest('[hidden]')) return;
+    if (d.status === 'error') { const f = document.createElement('div'); f.className = 'fail'; f.textContent = 'Gagal memuat'; box.append(f); return; }
+    if (d.status !== 'ok') return;
+    const b = brandNow(); const rows = window.ecFmt.pickRows(d.data, b);
+    const W = box.clientWidth || 400, H = 260, m = { t: 12, r: 16, b: 28, l: 44 };
+    const x = d3.scalePoint(rows.map((r) => r.week), [m.l, W - m.r]).padding(0.3);
+    const y = d3.scaleLinear([0, 1], [H - m.b, m.t]);
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    svg.append('g').selectAll('line').data(y.ticks(5)).join('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y).attr('y2', y).style('stroke', 'var(--cds-chart-grid)');
+    svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(d3.format('.0%')).tickSize(0)).attr('font-size', null).attr('font-family', null)
+      .call((g) => g.select('.domain').remove()).selectAll('text').style('fill', 'var(--color-fg-muted)').style('font-size', 'var(--cds-font-size-caption)');
+    svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).tickSize(0).tickPadding(8)).attr('font-size', null).attr('font-family', null)
+      .call((g) => g.select('.domain').style('stroke', 'var(--cds-chart-axis)')).selectAll('text').style('fill', 'var(--color-fg-muted)').style('font-size', 'var(--cds-font-size-caption)');
+    svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(0.5)).attr('y2', y(0.5)).style('stroke', 'var(--color-bad)').attr('stroke-dasharray', '5 4').attr('stroke-width', 1.5);
+    svg.append('text').attr('x', W - m.r).attr('y', y(0.5) - 6).attr('text-anchor', 'end').text('Target EC 50%').style('fill', 'var(--color-bad)').style('font-size', 'var(--cds-font-size-caption)');
+    S.forEach(([f], i) => {
+      svg.append('path').datum(rows).style('fill', 'none').style('stroke', dash.colors[i]).attr('stroke-width', 2).attr('stroke-linejoin', 'round').attr('stroke-linecap', 'round')
+        .attr('d', d3.line().x((r) => x(r.week)).y((r) => y(r[f])));
+      svg.append('g').selectAll('circle').data(rows).join('circle').attr('cx', (r) => x(r.week)).attr('cy', (r) => y(r[f])).attr('r', 3.5).style('fill', dash.colors[i]);
+    });
+    const tip = document.createElement('div'); tip.className = 'tip'; box.append(tip);
+    svg.append('g').selectAll('rect').data(rows).join('rect').attr('x', (r) => x(r.week) - x.step() / 2).attr('width', x.step()).attr('y', m.t).attr('height', H - m.t - m.b).style('fill', 'transparent')
+      .on('mousemove', (e, r) => {
+        tip.replaceChildren(); const t = document.createElement('div'); t.className = 't'; t.textContent = r.week; tip.append(t);
+        S.forEach(([f, n], i) => { const l = document.createElement('div'); const sw = document.createElement('i'); sw.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;background:${dash.colors[i]}`; l.append(sw, `${n}: ${pct(r[f])}`); tip.append(l); });
+        tip.style.display = 'block';
+        const [px, py] = d3.pointer(e, box); const tw = tip.offsetWidth;
+        tip.style.left = Math.min(Math.max(0, px + 12), box.clientWidth - tw) + 'px'; tip.style.top = Math.max(0, py - 20) + 'px';
+      }).on('mouseleave', () => { tip.style.display = 'none'; });
+  });
+})();
+</script>
+<script>
+(function () {
+  const { pct, int, brandNow } = window.ecFmt;
+  function hbars(boxId, id, rowsOf, label, val, fmtVal, extra, colorOf) {
+    const box = document.getElementById(boxId);
+    dash.onData(() => {
+      const d = dash.data(id); box.replaceChildren();
+      if (box.closest('[hidden]')) return;
+      if (d.status === 'error') { const f = document.createElement('div'); f.className = 'fail'; f.textContent = 'Gagal memuat'; box.append(f); return; }
+      if (d.status !== 'ok') return;
+      const rows = rowsOf(d.data, brandNow());
+      const W = box.clientWidth || 400, rowH = 34, m = { t: 4, r: 8, b: 4 };
+      const H = m.t + m.b + rows.length * rowH;
+      const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+      const lab = svg.append('g').selectAll('text').data(rows).join('text').text(label).attr('y', (r, i) => m.t + i * rowH + rowH / 2).attr('dy', '0.35em')
+        .style('fill', 'var(--color-fg)').style('font-size', 'var(--cds-font-size-caption)');
+      let lw = 0; lab.each(function () { lw = Math.max(lw, this.getComputedTextLength()); });
+      lw = Math.min(lw + 10, W * 0.5);
+      const endLab = 200;
+      const xmax = d3.max(rows, val) || 1;
+      const x = d3.scaleLinear([0, xmax], [lw, Math.max(lw + 20, W - m.r - endLab)]);
+      svg.append('g').selectAll('rect').data(rows).join('rect').attr('x', lw).attr('y', (r, i) => m.t + i * rowH + 7).attr('height', rowH - 14).attr('rx', 4)
+        .attr('width', (r) => Math.max(1, x(val(r)) - lw)).style('fill', (r) => colorOf(r));
+      svg.append('g').selectAll('text').data(rows).join('text').attr('x', (r) => x(val(r)) + 6).attr('y', (r, i) => m.t + i * rowH + rowH / 2).attr('dy', '0.35em')
+        .text((r) => fmtVal(r) + extra(r)).style('fill', 'var(--color-fg-muted)').style('font-size', 'var(--cds-font-size-caption)').style('font-variant-numeric', 'tabular-nums');
+    });
+  }
+  hbars('unplanned-chart', 'unplanned', (rows, b) => window.ecFmt.pickRows(rows, b).sort((a, c) => a.order - c.order),
+    (r) => window.ecT(r.type), (r) => r.ec_same_day_pct, (r) => pct(r.ec_same_day_pct), (r) => '  · ' + int(r.visit_call),
+    (r) => r.type === 'Planned visit' ? 'var(--cds-chart-muted)' : dash.colors[0]);
+  hbars('timing-chart', 'timing', (rows, b) => window.ecFmt.pickRows(rows, b).sort((a, c) => a.order - c.order),
+    (r) => window.ecT(r.billed), (r) => r.sales, (r) => 'Rp ' + d3.format(',.0f')(r.sales), (r) => '  · ' + pct(r.share),
+    (r) => r.billed === 'Before visit' ? 'var(--cds-chart-status-critical)' : dash.colors[0]);
+})();
+</script>
+<script>
+(function () {
+  const { pct, int, rpM, enc, brandNow } = window.ecFmt;
+  const tb = document.querySelector('#sales-table tbody'), q = document.getElementById('sales-search');
+  let sortK = 'visit_call', asc = false;
+  document.querySelectorAll('#sales-table th').forEach((th) => th.addEventListener('click', () => {
+    const k = th.dataset.k; if (sortK === k) asc = !asc; else { sortK = k; asc = k === 'salesman' || k === 'brand'; } draw();
+  }));
+  q.addEventListener('input', () => draw());
+  function draw() {
+    const d = dash.data('salesmen'); tb.replaceChildren();
+    document.querySelectorAll('#sales-table th').forEach((th) => th.setAttribute('aria-sort', th.dataset.k === sortK ? (asc ? 'ascending' : 'descending') : 'none'));
+    if (d.status !== 'ok') return;
+    const b = brandNow(), s = q.value.trim().toLowerCase();
+    const rows = d.data.filter((r) => (b === 'All' || r.brand === b) && (!window.ecFmt.smId() || r.sales_id === window.ecFmt.smId()) && (!s || String(r.salesman).toLowerCase().includes(s)))
+      .sort((a, c) => { const x = a[sortK], y = c[sortK]; const o = typeof x === 'string' ? String(x).localeCompare(String(y)) : x - y; return asc ? o : -o; });
+    rows.forEach((r) => {
+      const tr = document.createElement('tr'); tr.dataset.key = r.sales_id;
+      const cells = [[r.salesman, 'l'], [r.brand, 'l'], [int(r.planned)], [pct(r.compliance), r.planned > 0 && r.compliance < 0.5 ? 'bad' : ''], [int(r.executed)], [int(r.extra)], [int(r.unplanned)], [int(r.visit_call)], [pct(r.ec_same_day_pct), r.visit_call ? window.ecFmt.tgtClass(r.ec_same_day_pct) : ''], [pct(r.ec_same_week_pct)], [rpM(r.sales_total)], [pct(r.pct_sales_same_day_ec)]];
+      cells.forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+  }
+  dash.onData(draw);
+})();
+</script>
+<script>
+(function () {
+  const { int, brandNow } = window.ecFmt;
+  const box = document.getElementById('extra-chart'), tb = document.querySelector('#extra-table tbody'), q = document.getElementById('extra-search'), none = document.getElementById('extra-none');
+  const fd = (d) => d3.utcFormat('%a %-d %b')(new Date(d + 'T00:00:00Z'));
+  q.addEventListener('input', () => draw());
+  function draw() {
+    const d = dash.data('extra_checkins'); box.replaceChildren(); tb.replaceChildren();
+    if (document.getElementById('mtd').hidden || d.status !== 'ok') return;
+    const b = brandNow(), sid = window.ecFmt.smId(), s = q.value.trim().toLowerCase();
+    const rows = d.data.filter((r) => (b === 'All' || r.brand === b) && (!sid || r.sales_id === sid));
+    none.hidden = rows.length > 0; box.parentElement.parentElement.hidden = rows.length === 0;
+    // bars: count per salesman
+    const g = d3.rollups(rows, (v) => v.length, (r) => r.salesman).sort((a, c) => c[1] - a[1] || a[0].localeCompare(c[0])).slice(0, 15);
+    const W = box.clientWidth || 300, rowH = 26, H = 4 + g.length * rowH;
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const lab = svg.append('g').selectAll('text').data(g).join('text').text((r) => r[0]).attr('y', (r, i) => 2 + i * rowH + rowH / 2).attr('dy', '0.35em').style('fill', 'var(--color-fg)').style('font-size', 'var(--cds-font-size-caption)');
+    let lw = 0; lab.each(function () { lw = Math.max(lw, this.getComputedTextLength()); }); lw = Math.min(lw + 10, W * 0.55);
+    const x = d3.scaleLinear([0, d3.max(g, (r) => r[1]) || 1], [lw, Math.max(lw + 20, W - 40)]);
+    svg.append('g').selectAll('rect').data(g).join('rect').attr('x', lw).attr('y', (r, i) => 2 + i * rowH + 5).attr('height', rowH - 10).attr('rx', 3).attr('width', (r) => Math.max(1, x(r[1]) - lw)).style('fill', 'var(--c2)');
+    svg.append('g').selectAll('text').data(g).join('text').text((r) => int(r[1])).attr('x', (r) => x(r[1]) + 6).attr('y', (r, i) => 2 + i * rowH + rowH / 2).attr('dy', '0.35em').style('fill', 'var(--color-fg-muted)').style('font-size', 'var(--cds-font-size-caption)');
+    rows.filter((r) => !s || (r.dealer + ' ' + r.salesman).toLowerCase().includes(s)).forEach((r) => {
+      const tr = document.createElement('tr'); tr.dataset.key = r.id;
+      [[fd(r.date), 'l'], [r.salesman, 'l'], [r.dealer, 'l'], [int(r.nth)], [r.first_time + ' (' + r.first_activity + ')', 'l'], [r.time, 'l'], [int(r.gap_min), r.gap_min <= 10 ? 'bad' : ''], [r.activity, 'l'], [r.hasil_visit, 'l'], [window.ecT(r.effective_same_day), 'l' + (r.effective_same_day === 'Yes' ? ' good' : '')]]
+        .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+  }
+  dash.onData(draw);
+})();
+</script>
+<script>
+(function () {
+  const { int, brandNow } = window.ecFmt;
+  const rp = d3.format(',.0f'), fd = (d) => d ? d3.utcFormat('%-d %b')(new Date(d + 'T00:00:00Z')) : 'Belum dikunjungi';
+  const tb = document.querySelector('#target-table tbody'), q = document.getElementById('target-search'), sumEl = document.getElementById('target-sum');
+  const none = document.getElementById('target-none'), wrapT = document.querySelector('#target-table').parentElement;
+  let sortK = 'target', asc = false;
+  document.querySelectorAll('#target-table th').forEach((th) => th.addEventListener('click', () => {
+    const k = th.dataset.k; if (sortK === k) asc = !asc; else { sortK = k; asc = ['salesman', 'brand', 'dealer'].includes(k); } draw();
+  }));
+  q.addEventListener('input', () => draw());
+  function draw() {
+    const d = dash.data('target_open'); tb.replaceChildren(); sumEl.replaceChildren();
+    document.querySelectorAll('#target-table th').forEach((th) => th.setAttribute('aria-sort', th.dataset.k === sortK ? (asc ? 'ascending' : 'descending') : 'none'));
+    const res = dash.result && dash.result();
+    const tm = res && res.meta && res.meta.target;
+    const has = !!(tm && tm.has_target);
+    none.hidden = !res || has; wrapT.hidden = !has; q.hidden = !has;
+    if (d.status !== 'ok' || !has) return;
+    const b = brandNow(), s = q.value.trim().toLowerCase();
+    const k = tm.by_brand.find((r) => r.brand === b);
+    if (k) {
+      [[int(k.open_dealers) + ' dari ' + int(k.dealers), 'dealer bertarget belum ada billing'], ['Rp ' + rp(k.open_target), 'target di dealer tersebut'], [int(k.open_not_visited), 'di antaranya belum dikunjungi bulan ini']]
+        .forEach(([v, l], i) => { const x = document.createElement('div'); const vv = document.createElement('b'); vv.textContent = v; if (i === 2 && k.open_not_visited > 0) vv.className = 'bad'; x.append(vv, ' ' + l); sumEl.append(x); });
+    }
+    d.data.filter((r) => (b === 'All' || r.brand.split(', ').includes(b)) && (!window.ecFmt.smId() || r.sales_id === window.ecFmt.smId()) && (!s || (r.dealer + ' ' + r.salesman).toLowerCase().includes(s)))
+      .sort((a, c) => { const x = a[sortK], y = c[sortK]; const o = typeof x === 'string' ? String(x).localeCompare(String(y)) : x - y; return asc ? o : -o; })
+      .forEach((r) => {
+        const tr = document.createElement('tr'); tr.dataset.key = encodeURIComponent(r.sales_id) + ',' + encodeURIComponent(r.dealer_code);
+        [[r.salesman, 'l'], [r.brand, 'l'], [r.dealer, 'l'], [rp(r.target)], [int(r.planned_visits), r.planned_visits === 0 ? 'bad' : ''], [int(r.visit_call), r.visit_call === 0 ? 'bad' : ''], [fd(r.last_visit), 'l' + (r.last_visit ? '' : ' bad')]]
+          .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
+        tb.appendChild(tr);
+      });
+  }
+  dash.onData(draw);
+})();
+</script>
+<script>
+(function () {
+  const { pct, int, rpM, enc, brandNow } = window.ecFmt;
+  const fmtDay = (d) => d3.utcFormat('%A %-d %B %Y')(new Date(d + 'T00:00:00Z'));
+  const days = () => { const d = dash.data('daily_brand'); return d.status === 'ok' ? [...new Set(d.data.map((r) => r.date))].sort() : []; };
+  const dayNow = () => { const ds = days(); return ds[ds.length - 1]; };
+  const smNow = () => dash.params().salesman || null;
+  window.ecDay = { dayNow, fmtDay };
+
+  // tabs
+  const tabs = document.querySelectorAll('.ec .tab');
+  tabs.forEach((t) => t.addEventListener('click', () => { dash.setParams({ tab: t.dataset.tab }); }));
+  const want = location.hash.slice(1);
+  if (want === 'mtd' || want === 'daily') dash.setParams({ tab: want });
+
+  // salesman filter
+  const smClear = document.getElementById('sm-clear');
+  smClear.addEventListener('click', () => dash.setParams({ salesman: null }));
+
+  // tiles
+  const TILES = [
+    ['planned', 'Total plan', 'int', null],
+    ['compliance', 'Kepatuhan plan', 'pct', 'compliance'],
+    ['missed', 'Plan terlewat', 'int', null],
+    ['extra', 'Check-in tambahan', 'int', null],
+    ['unplanned', 'Di luar plan', 'int', null],
+    ['visit_call', 'Visit + Call', 'int', null],
+    ['ec_same_day_pct', 'EC hari sama', 'pct', 'ec_same_day_pct'],
+    ['sales_same_day_ec', 'Sales dari EC hari sama', 'rp', null],
+    ['pct_sales_same_day_ec', '% sales dari EC hari sama', 'pct', 'pct_sales_same_day_ec']
+  ];
+  const tilesEl = document.getElementById('day-tiles');
+  TILES.forEach(([f, lab, kind, cmp]) => {
+    const d = document.createElement('div'); d.className = 'tile'; d.id = 'dtile-' + f;
+    const l = document.createElement('div'); l.className = 'lab'; l.textContent = lab;
+    const v = document.createElement('div'); v.className = 'val dash-skeleton dmark'; v.textContent = '—'; v.dataset.source = 'daily_brand'; v.dataset.field = f; v.dataset.kind = kind;
+    const c = document.createElement('div'); c.className = 'cmp';
+    if (f === 'sales_same_day_ec') {
+      const a = document.createElement('span'); a.className = 'dmark'; a.dataset.source = 'daily_brand'; a.dataset.field = 'sales_total'; a.dataset.kind = 'rp'; a.textContent = '—';
+      c.append('dari total sales ', a);
+    } else if (f === 'pct_sales_same_day_ec') {
+      c.append('Sales EC hari sama ÷ total sales · bulan berjalan: ');
+      const m = document.createElement('span'); m.className = 'kmark'; m.dataset.source = 'kpi'; m.dataset.field = cmp; m.textContent = '—'; c.append(m);
+    } else if (cmp) {
+      c.append('Bulan berjalan: ');
+      const m = document.createElement('span'); m.className = 'kmark'; m.dataset.source = 'kpi'; m.dataset.field = cmp; m.textContent = '—'; c.append(m);
+    } else if (f === 'planned') c.textContent = 'Kunjungan dealer di PJP hari itu';
+    else if (f === 'missed') c.textContent = 'Dealer di plan yang tidak dikunjungi hari itu';
+    else if (f === 'extra') c.textContent = 'Check-in ke-2 dst. pada plan yang terlaksana';
+    else if (f === 'unplanned') c.textContent = 'Visit/Call yang tidak di-plan untuk hari itu';
+    else c.textContent = 'Terlaksana + Tambahan + Di luar plan';
+    d.append(l, v, c);
+    if (f === 'ec_same_day_pct') { const t = document.createElement('div'); t.className = 'tgt'; t.id = 'tgt-day'; d.append(t); }
+    tilesEl.append(d);
+  });
+
+  const fmt = (kind, v) => kind === 'pct' ? pct(v) : kind === 'rp' ? 'Rp ' + rpM(v) : int(v);
+
+  dash.onData(() => {
+    const tab = dash.params().tab || 'daily';
+    tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === tab)));
+    document.getElementById('daily').hidden = tab !== 'daily';
+    document.getElementById('mtd').hidden = tab !== 'mtd';
+
+    const b = brandNow(), d = dash.data('daily_brand'), k = dash.data('kpi');
+    const day = dayNow(), sm = smNow();
+    document.querySelectorAll('#daily .dlabel').forEach((x) => { x.textContent = day ? fmtDay(day) : '—'; });
+    document.querySelectorAll('#daily .smname').forEach((x) => { x.textContent = sm ? ' · ' + sm.split('|')[1] : ''; });
+    smClear.hidden = !sm; smClear.textContent = sm ? sm.split('|')[1] + ' ×' : '';
+
+    const sid = window.ecFmt.smId(), dsm = dash.data('daily_salesman'), sAll = dash.data('salesmen');
+    let row = null;
+    if (sid) { const r = dsm.status === 'ok' ? dsm.data.find((x) => x.date === day && x.sales_id === sid) : null;
+      row = r || (dsm.status === 'ok' ? { planned: 0, executed: 0, missed: 0, compliance: 0, extra: 0, visit_call: 0, unplanned: 0, ec_same_day: 0, ec_same_day_pct: 0, sales_same_day_ec: 0, sales_total: 0, pct_sales_same_day_ec: 0 } : null); }
+    else row = d.status === 'ok' ? d.data.find((r) => r.date === day && r.brand === b) : null;
+    document.querySelectorAll('#daily .dmark').forEach((el) => {
+      el.dataset.where = 'date=' + enc(day || '') + '&brand=' + enc(b);
+      el.classList.toggle('dash-skeleton', d.status === 'loading');
+      const kind = el.dataset.kind || 'int';
+      el.textContent = row ? fmt(kind, row[el.dataset.field]) : '—';
+    });
+    const krow = sid ? (sAll.status === 'ok' ? sAll.data.find((r) => r.sales_id === sid) : null) : (k.status === 'ok' ? k.data.find((r) => r.brand === b) : null);
+    document.querySelectorAll('#daily .kmark').forEach((el) => {
+      el.dataset.where = 'brand=' + enc(b);
+      el.textContent = krow ? pct(krow[el.dataset.field]) : '—';
+    });
+    if (row && krow) {
+      [['compliance', 'compliance'], ['pct_sales_same_day_ec', 'pct_sales_same_day_ec']].forEach(([f, c]) => {
+        const el = document.querySelector('#dtile-' + f + ' .val');
+        el.style.color = row[f] < krow[c] ? 'var(--color-bad)' : 'var(--color-ok)';
+      });
+    }
+    { const tg = window.ecFmt.ecTarget(row), tEl = document.getElementById('tgt-day'), vEl = document.querySelector('#dtile-ec_same_day_pct .val');
+      tEl.textContent = row ? tg.text : ''; tEl.className = 'tgt' + (tg.ok === true ? ' good' : tg.ok === false ? ' bad' : '');
+      vEl.style.color = row && tg.ok !== null ? (tg.ok ? 'var(--color-ok)' : 'var(--color-bad)') : ''; }
+  });
+})();
+</script>
+<script>
+(function () {
+  const { pct, int, rpM, enc, brandNow } = window.ecFmt;
+  const tb = document.querySelector('#day-sales tbody');
+  let sortK = 'missed', asc = false;
+  document.querySelectorAll('#day-sales th').forEach((th) => th.addEventListener('click', () => {
+    const k = th.dataset.k; if (sortK === k) asc = !asc; else { sortK = k; asc = k === 'salesman' || k === 'brand'; } draw();
+  }));
+  tb.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-sid]'); if (!tr) return;
+    const v = tr.dataset.sid + '|' + tr.dataset.name;
+    dash.setParams({ salesman: dash.params().salesman === v ? null : v });
+  });
+  function draw() {
+    const d = dash.data('daily_salesman'); tb.replaceChildren();
+    document.querySelectorAll('#day-sales th').forEach((th) => th.setAttribute('aria-sort', th.dataset.k === sortK ? (asc ? 'ascending' : 'descending') : 'none'));
+    if (d.status !== 'ok') return;
+    const b = brandNow(), day = window.ecDay.dayNow(), sm = dash.params().salesman;
+    d.data.filter((r) => r.date === day && (b === 'All' || r.brand === b) && (!sm || r.sales_id === sm.split('|')[0]))
+      .sort((a, c) => { const x = a[sortK], y = c[sortK]; const o = typeof x === 'string' ? String(x).localeCompare(String(y)) : x - y; return asc ? o : -o; })
+      .forEach((r) => {
+        const tr = document.createElement('tr'); tr.dataset.key = enc(r.date) + ',' + enc(r.sales_id); tr.dataset.sid = r.sales_id; tr.dataset.name = r.salesman;
+        tr.className = 'click' + (sm && sm.startsWith(r.sales_id + '|') ? ' sel' : '');
+        const cells = [[r.salesman, 'l'], [r.brand, 'l'], [int(r.planned)], [int(r.missed), r.missed > 0 ? 'bad' : ''], [r.planned ? pct(r.compliance) : '–', r.planned && r.compliance < 0.5 ? 'bad' : ''],
+          [int(r.executed)], [int(r.extra)], [int(r.unplanned)], [int(r.visit_call)], [int(r.ec_same_day), r.visit_call > 0 && r.ec_same_day === 0 ? 'bad' : ''], [pct(r.ec_same_day_pct), r.visit_call ? window.ecFmt.tgtClass(r.ec_same_day_pct) : ''], [rpM(r.sales_same_day_ec)]];
+        cells.forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
+        tb.appendChild(tr);
+      });
+  }
+  dash.onData(draw);
+})();
+</script>
+<script>
+(function () {
+  const { int, rpM, brandNow } = window.ecFmt;
+  const tb = document.querySelector('#day-visits tbody'), q = document.getElementById('visit-search');
+  q.addEventListener('input', () => draw());
+  function draw() {
+    const d = dash.data('daily_visits'); tb.replaceChildren();
+    if (d.status !== 'ok') return;
+    const b = brandNow(), day = window.ecDay.dayNow(), sm = dash.params().salesman, s = q.value.trim().toLowerCase();
+    const sid = sm ? sm.split('|')[0] : null;
+    d.data.filter((r) => r.date === day && (b === 'All' || r.brand === b) && (!sid || r.sales_id === sid) && (!s || (r.dealer + ' ' + r.salesman).toLowerCase().includes(s)))
+      .forEach((r) => {
+        const tr = document.createElement('tr'); tr.dataset.key = r.visit_id;
+        [[r.time, 'l'], [r.salesman, 'l'], [r.dealer, 'l'], [r.activity, 'l'], [window.ecT(r.plan_status), 'l' + (r.plan_status === 'Not in plan' ? ' bad' : '')], [r.hasil_visit, 'l'], [window.ecT(r.effective_same_day), 'l' + (r.effective_same_day === 'Yes' ? ' good' : '')], [r.same_day_sales ? rpM(r.same_day_sales) : '–']]
+          .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
+        tb.appendChild(tr);
+      });
+  }
+  dash.onData(draw);
+})();
+</script>
+<script>
+(function () {
+  const { brandNow } = window.ecFmt;
+  const tb = document.querySelector('#day-missed tbody');
+  dash.onData(() => {
+    const d = dash.data('daily_missed'); tb.replaceChildren();
+    if (d.status !== 'ok') return;
+    const b = brandNow(), day = window.ecDay.dayNow(), sm = dash.params().salesman;
+    const sid = sm ? sm.split('|')[0] : null;
+    d.data.filter((r) => r.date === day && (b === 'All' || r.brand === b) && (!sid || r.sales_id === sid))
+      .sort((a, c) => a.salesman.localeCompare(c.salesman) || a.dealer.localeCompare(c.dealer))
+      .forEach((r) => {
+        const tr = document.createElement('tr'); tr.dataset.key = r.plan_key;
+        [[r.salesman, 'l'], [r.dealer, 'l'], [window.ecT(r.visited_same_week), 'l' + (r.visited_same_week === 'No' ? ' bad' : '')]]
+          .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
+        tb.appendChild(tr);
+      });
+  });
+})();
+</script>
+
+<script>
+// GitHub Pages version: data comes from an uploaded Billing file (kept in this browser) or from data.json next to this page.
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const status = $('upd-status'), input = $('file-in'), btn = $('upload-btn'), empty = $('empty'), main = $('main');
+  const say = (t, cls) => { status.textContent = t; status.className = cls || ''; };
+  const fmtD = (iso) => d3.utcFormat('%-d %b %Y')(new Date(iso.slice(0, 10) + 'T00:00:00Z'));
+  const fmtT = (iso) => d3.timeFormat('%-d %b %Y, %H:%M')(new Date(iso));
+  const KEY = 'ec-dashboard-v1';
+  let current = null; // { doc, result, source }
+
+  function period(meta) {
+    const a = new Date(meta.period_start + 'T00:00:00Z'), b = new Date(meta.latest_billing_date + 'T00:00:00Z');
+    return { long: a.getUTCDate() + '–' + d3.utcFormat('%-d %b %Y')(b), short: a.getUTCDate() + '–' + d3.utcFormat('%-d %B')(b) };
+  }
+  function showSource(doc, result, source) {
+    const m = result.meta, p = period(m);
+    document.querySelectorAll('.period').forEach((x) => { x.textContent = p.long; });
+    document.querySelectorAll('.period-short').forEach((x) => { x.textContent = p.short; });
+    const wn = $('weeknote'); if (wn) wn.textContent = m.weeks.map((w) => w.week + ' = ' + d3.utcFormat('%-d')(new Date(w.from + 'T00:00:00Z')) + '–' + d3.utcFormat('%-d %b')(new Date(w.to + 'T00:00:00Z'))).join(', ') + '.';
+    $('src-line').textContent = 'Data ' + p.long + ' dari ' + (doc.file_name || 'file billing') + (doc.uploaded_at ? ', diproses ' + fmtT(doc.uploaded_at) : '') + (source === 'local' ? ' (tersimpan di browser ini).' : ' (data.json).');
+    $('dl-btn').hidden = false; $('clear-btn').hidden = source !== 'local';
+  }
+  function setEmpty(on) { empty.hidden = !on; main.hidden = on; }
+  function use(doc, result, source) {
+    current = { doc, result, source };
+    setEmpty(false); dash._set({ status: 'ok', result }); showSource(doc, result, source);
+  }
+
+  const WANT = { plan: /^plan visit/i, track: /^data tracking visit/i, bill: /^billing/i, target: /^target/i };
+  async function handle(file) {
+    if (!file) return;
+    btn.setAttribute('aria-disabled', 'true');
+    try {
+      if (!/\.xlsx$/i.test(file.name)) throw new Error('Pilih file billing .xlsx (workbook Excel).');
+      say('Membaca ' + file.name + '…'); await new Promise((r) => setTimeout(r, 30));
+      const wb = await window.readXlsx(await file.arrayBuffer(), (n) => Object.values(WANT).some((re) => re.test(n.trim())));
+      const pick = (re) => wb.sheetNames.find((n) => re.test(n.trim()));
+      const miss = Object.entries({ 'Plan Visit': WANT.plan, 'Data Tracking Visit': WANT.track, 'Billing Sales B2B …': WANT.bill }).filter(([, re]) => !pick(re)).map(([n]) => n);
+      if (miss.length) throw new Error('Sheet tidak ditemukan: ' + miss.join(', ') + '. Sheet di file ini: ' + wb.sheetNames.join(', ') + '.');
+      say('Menghitung effective call…'); await new Promise((r) => setTimeout(r, 30));
+      const result = window.ecCompute({ plan: wb.rows[pick(WANT.plan)], track: wb.rows[pick(WANT.track)], bill: wb.rows[pick(WANT.bill)], target: pick(WANT.target) ? wb.rows[pick(WANT.target)] : null });
+      const doc = { file_name: file.name, uploaded_at: new Date().toISOString() };
+      try { localStorage.setItem(KEY, JSON.stringify({ doc, result })); } catch (e) { /* storage full or blocked: still show it */ }
+      use(doc, result, 'local');
+      say('Selesai. Data sekarang sampai ' + fmtD(result.meta.latest_billing_date) + ' (' + d3.format(',')(result.meta.rows.billing) + ' baris billing, ' + d3.format(',')(result.meta.rows.tracking) + ' check-in, ' + d3.format(',')(result.meta.rows.plan) + ' plan' + (result.meta.target && result.meta.target.has_target ? ', ' + d3.format(',')(result.meta.target.rows) + ' baris target' : ', tanpa sheet Target') + ').', 'ok');
+    } catch (e) {
+      say((e && e.message) || 'File tidak bisa diproses.', 'err');
+    } finally { btn.removeAttribute('aria-disabled'); input.value = ''; }
+  }
+  input.addEventListener('change', () => handle(input.files[0]));
+  btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+
+  $('dl-btn').addEventListener('click', () => {
+    if (!current) return;
+    const blob = new Blob([JSON.stringify({ doc: current.doc, result: current.result })], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'data.json';
+    document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  });
+  $('clear-btn').addEventListener('click', () => {
+    try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+    say('Data di browser ini dihapus.'); boot();
+  });
+
+  async function boot() {
+    let local = null, shared = null;
+    try { const t = localStorage.getItem(KEY); if (t) local = JSON.parse(t); } catch (e) { local = null; }
+    try { const r = await fetch('data.json', { cache: 'no-store' }); if (r.ok) shared = await r.json(); } catch (e) { shared = null; }
+    const ts = (x) => (x && x.doc && x.doc.uploaded_at) || '';
+    const pickL = local && local.result && (!shared || ts(local) >= ts(shared));
+    if (pickL) use(local.doc, local.result, 'local');
+    else if (shared && shared.result) use(shared.doc || {}, shared.result, 'shared');
+    else { current = null; dash._set({ status: 'missing', result: null }); setEmpty(true); $('src-line').textContent = 'Belum ada data. Upload file Billing bulanan untuk mulai.'; $('dl-btn').hidden = true; $('clear-btn').hidden = true; }
+  }
+  boot();
+})();
+</script>
+
+
+</body>
+</html>
