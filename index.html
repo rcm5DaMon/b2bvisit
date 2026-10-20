@@ -47,6 +47,8 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
 .btn:focus-visible,.ec .chip:focus-visible,.ec .tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btn.ghost{background:transparent;color:var(--accent)}
 .btn[aria-disabled=true]{opacity:.5;pointer-events:none}
+#xl-status{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+#xl-status.err{color:var(--color-bad)}
 #upd-status{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
 #upd-status.err{color:var(--color-bad)} #upd-status.ok{color:var(--color-ok)}
 .empty{background:var(--color-panel);border:1px dashed var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-lg);font-size:var(--cds-font-size-body);line-height:1.5;max-width:46rem}
@@ -125,6 +127,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       <input type="file" id="file-in" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
       <span id="upd-status" role="status">Gunakan file Billing bulanan dengan sheet Plan Visit, Data Tracking Visit, Billing Sales B2B dan Target.</span>
     </div>
+    <div class="upd" id="xl-row" hidden><button class="btn ghost" type="button" id="xl-btn">Download Excel</button><span id="xl-status" role="status"></span></div>
   </header>
   <div class="empty" id="empty" hidden><b>Belum ada data.</b> <span id="empty-text">Upload file Billing bulanan (.xlsx dengan sheet Plan Visit, Data Tracking Visit, Billing Sales B2B dan Target) lewat tombol di atas. File diproses di browser Anda dan tidak dikirim ke mana pun.</span></div>
   <div id="main" class="page">
@@ -360,23 +363,24 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
   const sum = (arr, f) => arr.reduce((t, x) => t + f(x), 0);
 
   function checkColumns(rows, need, label) {
-    if (!rows.length) return [`Sheet "${label}" tidak berisi data.`];
+    if (!rows.length) return [`Sheet "${label}" has no rows.`];
     const have = new Set(Object.keys(rows[0]));
     rows.slice(0, 50).forEach((r) => Object.keys(r).forEach((k) => have.add(k)));
     const miss = need.filter((c) => !have.has(c));
-    return miss.length ? [`Sheet "${label}" tidak memiliki kolom: ${miss.join(', ')}.`] : [];
+    return miss.length ? [`Sheet "${label}" is missing column(s): ${miss.join(', ')}.`] : [];
   }
 
-  function compute(input) {
+  function compute(input, opts) {
     const errs = [...checkColumns(input.plan, REQ.plan, 'Plan Visit'), ...checkColumns(input.track, REQ.track, 'Data Tracking Visit'), ...checkColumns(input.bill, REQ.bill, 'Billing Sales')];
     if (errs.length) throw new Error(errs.join(' '));
 
     // ---- billing: cut-off = latest Billing Date; month = the cut-off's month
     let B = input.bill.filter((r) => num(r['Billing Date']) > 0).map((r) => ({
       d: day(r['Billing Date']), type: str(r['Billing Type']), sid: str(r['Uniqcode Salesman']), sname: str(r['Salesman Name']),
-      dealer: str(r['Sold to Party Code']), pbrand: str(r['Brand Name']), net: num(r['Total Nett Amount No Tax'])
+      dealer: str(r['Sold to Party Code']), pbrand: str(r['Brand Name']), net: num(r['Total Nett Amount No Tax']),
+      dname: str(r['Sold to Party Name']), art: str(r['Article Code']), desc: str(r['Article Description']), ig: str(r['Item Group Desc']), qty: num(r['Quantity'])
     }));
-    if (!B.length) throw new Error('Tidak ada baris billing yang punya Billing Date.');
+    if (!B.length) throw new Error('No billing rows with a Billing Date.');
     const cutoff = Math.max(...B.map((r) => r.d));
     const cd = new Date(Math.round((cutoff - 25569) * 864e5));
     const m0 = Math.round(Date.UTC(cd.getUTCFullYear(), cd.getUTCMonth(), 1) / 864e5) + 25569;
@@ -386,7 +390,8 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     const week = (d) => 'W' + (Math.floor((d - wd(d) - mon0) / 7) + 1);
 
     const P = input.plan.filter((r) => num(r['PJP Date']) > 0 && inP(day(r['PJP Date']))).map((r, i) => ({
-      i, d: day(r['PJP Date']), brand: str(r['Brand']), sid: str(r['Sales ID']), sname: str(r['Sales Name']), dealer: str(r['BP Code']), dname: str(r['Dealer'])
+      i, d: day(r['PJP Date']), brand: str(r['Brand']), sid: str(r['Sales ID']), sname: str(r['Sales Name']), dealer: str(r['BP Code']), dname: str(r['Dealer']),
+      dtype: str(r['Dealer Type']), src: str(r['Source']), status: str(r['Status Visit'])
     }));
     const T = input.track.filter((r) => num(r['Tgl. Kunjungan']) > 0 && inP(day(r['Tgl. Kunjungan']))).map((r, i) => {
       const nd = str(r['Nama Dealer']), sc = str(r['Uniq SC']);
@@ -394,7 +399,8 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       return {
         i, t: num(r['Tgl. Kunjungan']), d: day(r['Tgl. Kunjungan']), sc, sid: sc || '(no ID)', sname: str(r['Nama Sales']),
         act: str(r['Aktivitas']) || '(blank)', dealer: sc ? left8 : (/^\d{8}/.test(nd) ? left8 : ''),
-        dname: nd.replace(/^\d{8}\s*/, ''), hasil: str(r['Hasil Visit']) || '(blank)', key: day(r['Tgl. Kunjungan']) + sc + left8
+        dname: nd.replace(/^\d{8}\s*/, ''), hasil: str(r['Hasil Visit']) || '(blank)', key: day(r['Tgl. Kunjungan']) + sc + left8,
+        dur: num(r['Durasi Kunjungan']), ket: str(r['Keterangan Hasil Visit'])
       };
     });
     P.forEach((p) => { p.key = p.d + p.sid + p.dealer; p.w = week(p.d); });
@@ -457,7 +463,8 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     });
     // plan execution
     const vcBySDW = new Set(V.map((v) => v.sid + '|' + v.dealer + '|' + v.w));
-    P.forEach((p) => { p.exec = vcKeys.has(p.key); p.sameWeek = vcBySDW.has(p.sid + '|' + p.dealer + '|' + p.w); });
+    const viaKey = new Map(); V.slice().sort((a, b) => a.t - b.t).forEach((v) => { if (!viaKey.has(v.key)) viaKey.set(v.key, v.act); });
+    P.forEach((p) => { p.exec = vcKeys.has(p.key); p.via = viaKey.get(p.key) || ''; p.sameWeek = vcBySDW.has(p.sid + '|' + p.dealer + '|' + p.w); });
 
     // ---- aggregates
     const sub = (arr, f, br) => (br === 'All' ? arr : arr.filter((x) => f(x) === br));
@@ -609,13 +616,34 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       return { plan_key: n > 1 ? p.key + '#' + n : p.key, date: iso(L), sales_id: p.sid, salesman: p.sname || nameOf(p.sid), brand: p.brand, dealer_code: p.dealer, dealer: p.dname, visited_same_week: p.sameWeek ? 'Yes' : 'No' };
     });
 
+
+    // ---- row-level detail for the Excel download (only when asked)
+    let detail = null;
+    if (opts && opts.detail) {
+      const unplKeys = new Set(V.filter((v) => !v.planned).map((v) => v.key)), plKeys = new Set(V.filter((v) => v.planned).map((v) => v.key));
+      const plWk = new Set(V.filter((v) => v.planned).map((v) => v.wk));
+      const vset = new Set(V);
+      detail = {
+        visits: T.slice().sort((a, b) => a.t - b.t).map((t) => {
+          const isV = vset.has(t);
+          return { d: t.d, t: t.t, w: t.w, sid: t.sid, name: t.name, brand: t.brand, dealer: t.dealer, dname: t.dname, act: t.act, hasil: t.hasil, dur: t.dur, key: t.key, wk: t.wk,
+            plan: isV ? (t.planned ? 'Planned' : 'Unplanned') : 'N/A', sd: isV ? t.sd : 0, ecd: isV ? t.ecd : 0, sw: isV ? t.sw : 0, ecw: isV ? t.ecw : 0, ket: t.ket,
+            extra: isV && t.extraT ? 1 : 0, utype: isV ? t.utype : '', before: isV ? t.before : 0, after: isV ? t.after : 0, fwd: isV ? t.fwd : 0, msub: isV ? t.msub : '' };
+        }),
+        plans: P.map((p) => ({ d: p.d, w: p.w, brand: p.brand, sid: p.sid, name: p.sname, dealer: p.dealer, dname: p.dname, dtype: p.dtype, src: p.src, key: p.key,
+          exec: p.exec ? 'Yes' : 'No', via: p.via, sameWeek: p.sameWeek ? 'Yes' : 'No', status: p.status })),
+        bills: B.map((b) => ({ d: b.d, w: b.w, type: b.type, sid: b.sid, sname: b.sname, sbrand: b.sbrand, dealer: b.dealer, dname: b.dname, art: b.art, desc: b.desc, ig: b.ig,
+          pbrand: b.pbrand, qty: b.qty, net: b.net, key: b.key, wk: b.wk, q: b.q, r: b.r, ud: unplKeys.has(b.key) ? 1 : 0, uw: b.tu, pd: plKeys.has(b.key) ? 1 : 0, pw: plWk.has(b.wk) ? 1 : 0,
+          timing: b.timing, since: b.since }))
+      };
+    }
     const meta = {
       period_start: iso(m0), latest_billing_date: iso(cutoff), weeks: weekRange,
       rows: { plan: P.length, tracking: T.length, billing: B.length },
       ignored: { plan: input.plan.length - P.length, tracking: input.track.length - T.length, billing: input.bill.length - B.length }
     };
     meta.target = target_meta;
-    return { meta, kpi, weekly, unplanned, timing, salesmen, candidates, target_open, extra_checkins, daily_brand, daily_salesman, daily_visits, daily_missed };
+    return { meta, kpi, weekly, unplanned, timing, salesmen, candidates, target_open, extra_checkins, daily_brand, daily_salesman, daily_visits, daily_missed, ...(detail ? { detail } : {}) };
   }
   root.ecCompute = compute;
   root.ecRequired = REQ;
@@ -623,6 +651,362 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
+<script>
+// Minimal .xlsx writer: sheets of rows -> Uint8Array (zip with deflate). Styles by name.
+// Cell: a value (string/number/null) or {v, s} with s one of the STYLE names below.
+(function (root) {
+  const STYLES = ['txt', 'int', 'pct', 'rp', 'date', 'hdr', 'title', 'sub', 'sec', 'tot', 'totint', 'totpct', 'totrp', 'bold', 'time', 'dec'];
+  const xfOf = Object.fromEntries(STYLES.map((n, i) => [n, i + 1])); // xf 0 = default
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  const colName = (i) => { let s = ''; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+
+  const stylesXml = () => {
+    // fonts: 0 Arial10, 1 Arial10 bold, 2 Arial14 bold navy, 3 Arial9 italic grey, 4 Arial10 bold white, 5 Arial11 bold navy
+    const fonts = ['<font><sz val="10"/><name val="Arial"/></font>', '<font><b/><sz val="10"/><name val="Arial"/></font>',
+      '<font><b/><sz val="14"/><color rgb="FF14213D"/><name val="Arial"/></font>', '<font><i/><sz val="9"/><color rgb="FF5B6478"/><name val="Arial"/></font>',
+      '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>', '<font><b/><sz val="11"/><color rgb="FF14213D"/><name val="Arial"/></font>'];
+    const fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF14213D"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFEAEFF5"/><bgColor indexed="64"/></patternFill></fill>'];
+    const numFmts = '<numFmts count="4"><numFmt numFmtId="164" formatCode="0.0%"/><numFmt numFmtId="165" formatCode="#,##0"/><numFmt numFmtId="166" formatCode="yyyy-mm-dd"/><numFmt numFmtId="167" formatCode="hh:mm"/></numFmts>';
+    // name -> [numFmtId, fontId, fillId, wrap]
+    const def = { txt: [0, 0, 0], int: [165, 0, 0], pct: [164, 0, 0], rp: [165, 0, 0], date: [166, 0, 0], hdr: [0, 4, 2, 1], title: [0, 2, 0], sub: [0, 3, 0], sec: [0, 5, 0],
+      tot: [0, 1, 3], totint: [165, 1, 3], totpct: [164, 1, 3], totrp: [165, 1, 3], bold: [0, 1, 0], time: [167, 0, 0], dec: [0, 0, 0] };
+    const xf = (n, f, fi, wrap) => `<xf numFmtId="${n}" fontId="${f}" fillId="${fi}" borderId="0" xfId="0"${n ? ' applyNumberFormat="1"' : ''}${f ? ' applyFont="1"' : ''}${fi ? ' applyFill="1"' : ''}${wrap ? ' applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf>' : '/>'}`;
+    const xfs = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>', ...STYLES.map((s) => xf(...def[s]))];
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' + numFmts +
+      `<fonts count="${fonts.length}">${fonts.join('')}</fonts><fills count="${fills.length}">${fills.join('')}</fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>` +
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' + `<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>` +
+      '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+  };
+
+  function sheetXml(sh) {
+    const out = [];
+    out.push('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">');
+    if (sh.freeze) {
+      const m = sh.freeze.match(/^([A-Z]+)(\d+)$/); const col = m[1].split('').reduce((a, c) => a * 26 + c.charCodeAt(0) - 64, 0) - 1, row = +m[2] - 1;
+      out.push('<sheetViews><sheetView workbookViewId="0"><pane' + (col ? ` xSplit="${col}"` : '') + (row ? ` ySplit="${row}"` : '') + ` topLeftCell="${sh.freeze}" activePane="${col && row ? 'bottomRight' : row ? 'bottomLeft' : 'topRight'}" state="frozen"/></sheetView></sheetViews>`);
+    }
+    if (sh.cols) out.push('<cols>' + sh.cols.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('') + '</cols>');
+    out.push('<sheetData>');
+    sh.rows.forEach((row, ri) => {
+      if (!row || !row.length) return;
+      const cells = [];
+      row.forEach((c, ci) => {
+        if (c === null || c === undefined || c === '') return;
+        const v = typeof c === 'object' ? c.v : c, st = typeof c === 'object' && c.s ? xfOf[c.s] : 0;
+        if (v === null || v === undefined || v === '') { if (st) cells.push(`<c r="${colName(ci)}${ri + 1}" s="${st}"/>`); return; }
+        const ref = colName(ci) + (ri + 1), sa = st ? ` s="${st}"` : '';
+        if (typeof v === 'number') cells.push(Number.isFinite(v) ? `<c r="${ref}"${sa}><v>${v}</v></c>` : `<c r="${ref}"${sa}/>`);
+        else cells.push(`<c r="${ref}"${sa} t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`);
+      });
+      out.push(`<row r="${ri + 1}">${cells.join('')}</row>`);
+    });
+    out.push('</sheetData>');
+    if (sh.autofilter) out.push(`<autoFilter ref="${sh.autofilter}"/>`);
+    if (sh.merges && sh.merges.length) out.push(`<mergeCells count="${sh.merges.length}">` + sh.merges.map((m) => `<mergeCell ref="${m}"/>`).join('') + '</mergeCells>');
+    out.push('</worksheet>');
+    return out.join('');
+  }
+
+  // ---- zip
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = (u8) => { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  async function deflate(u8) {
+    const cs = new CompressionStream('deflate-raw');
+    return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(cs)).arrayBuffer());
+  }
+  async function zip(files) {
+    const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+    for (const [name, text] of files) {
+      const raw = enc.encode(text), comp = await deflate(raw), nb = enc.encode(name), crc = crc32(raw);
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 8, true);
+      lh.setUint16(10, 0, true); lh.setUint16(12, 0x21, true); lh.setUint32(14, crc, true); lh.setUint32(18, comp.length, true); lh.setUint32(22, raw.length, true);
+      lh.setUint16(26, nb.length, true); lh.setUint16(28, 0, true);
+      parts.push(new Uint8Array(lh.buffer), nb, comp);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 8, true);
+      ch.setUint16(12, 0, true); ch.setUint16(14, 0x21, true); ch.setUint32(16, crc, true); ch.setUint32(20, comp.length, true); ch.setUint32(24, raw.length, true);
+      ch.setUint16(28, nb.length, true); ch.setUint32(42, off, true);
+      central.push(new Uint8Array(ch.buffer), nb);
+      off += 30 + nb.length + comp.length;
+    }
+    const csize = central.reduce((a, p) => a + p.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, csize, true); end.setUint32(16, off, true);
+    const all = [...parts, ...central, new Uint8Array(end.buffer)], total = all.reduce((a, p) => a + p.length, 0), out = new Uint8Array(total);
+    let p = 0; all.forEach((a) => { out.set(a, p); p += a.length; });
+    return out;
+  }
+
+  async function writeXlsx(sheets) {
+    const files = [];
+    files.push(['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') + '</Types>']);
+    files.push(['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>']);
+    const defNames = sheets.map((s, i) => s.autofilter ? `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${s.name.replace(/'/g, "''")}'!$${s.autofilter.replace(':', ':$').replace(/([A-Z]+)(\d+)/g, '$1$$$2')}</definedName>` : '').join('');
+    files.push(['xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' +
+      sheets.map((s, i) => `<sheet name="${esc(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets>' + (defNames ? `<definedNames>${defNames}</definedNames>` : '') + '</workbook>']);
+    files.push(['xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('') +
+      `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`]);
+    files.push(['xl/styles.xml', stylesXml()]);
+    sheets.forEach((s, i) => files.push([`xl/worksheets/sheet${i + 1}.xml`, sheetXml(s)]));
+    return zip(files);
+  }
+  root.writeXlsx = writeXlsx;
+  if (typeof module !== 'undefined') module.exports = { writeXlsx };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Builds the Effective Call workbook (same layout as the analysis workbook) from the calculation result + row detail.
+(function (root) {
+  const BR = ['Xiaomi', 'Samsung', 'Tecno', 'Apple'];
+  const sum = (a, f) => a.reduce((t, x) => t + f(x), 0);
+  const ratio = (a, b) => (b ? a / b : 0);
+  const H = (v) => ({ v, s: 'hdr' }), P = (v) => ({ v, s: 'pct' }), N = (v) => ({ v, s: 'int' }), R = (v) => ({ v, s: 'rp' });
+  const T = (v) => ({ v, s: 'title' }), S = (v) => ({ v, s: 'sub' }), SEC = (v) => ({ v, s: 'sec' }), D = (v) => ({ v, s: 'date' });
+  const tot = (row) => row.map((c, i) => (i === 0 ? { v: c && c.v !== undefined ? c.v : c, s: 'tot' } : c && typeof c === 'object' ? { v: c.v, s: c.s === 'pct' ? 'totpct' : c.s === 'rp' ? 'totrp' : 'totint' } : { v: c, s: typeof c === 'number' ? 'totint' : 'tot' }));
+  const iso = (s) => new Date(Math.round((s - 25569) * 864e5)).toISOString().slice(0, 10);
+
+  function build(result, detail, info) {
+    const m = result.meta, VV = detail.visits, VC = VV.filter((v) => v.plan !== 'N/A'), PL = detail.plans, BL = detail.bills, S2 = BL.filter((b) => b.type === 'ZF2');
+    const per = info.period;
+    const sheets = [];
+
+    // metric row for a set of visits / plans / sales
+    const MH = ['Planned Visits', 'Plan Executed', 'Plan Compliance %', 'Visit', 'Call', 'Total Visit+Call', 'Extra Check-ins (2nd+ on executed plan)', 'Unplanned Visit/Call',
+      'EC Same Day', 'EC Same Day %', 'EC Same Week', 'EC Same Week %', 'Sales from Same-Day EC (Rp)', 'Sales from Same-Week EC (Rp)', 'Total Salesman Sales (Rp)', '% Sales from Same-Day EC'];
+    const metrics = (v, p, s) => {
+      const ex = p.filter((x) => x.exec === 'Yes').length, ecd = sum(v, (x) => x.ecd), ecw = sum(v, (x) => x.ecw), st = sum(s, (x) => x.net), sd = sum(s.filter((x) => x.q), (x) => x.net);
+      return [N(p.length), N(ex), P(ratio(ex, p.length)), N(v.filter((x) => x.act === 'Visit').length), N(v.filter((x) => x.act === 'Call').length), N(v.length), N(sum(v, (x) => x.extra)),
+        N(v.filter((x) => x.plan === 'Unplanned').length), N(ecd), P(ratio(ecd, v.length)), N(ecw), P(ratio(ecw, v.length)), R(sd), R(sum(s.filter((x) => x.r), (x) => x.net)), R(st), P(ratio(sd, st))];
+    };
+    const brandsAll = [...BR, ...[...new Set(VC.map((v) => v.brand))].filter((b) => !BR.includes(b)).sort()];
+    const weeks = m.weeks.map((w) => w.week);
+    const wkLabel = m.weeks.map((w) => `${w.week} = ${iso0(w.from)}–${iso0(w.to)}`).join(', ');
+    function iso0(d) { const x = new Date(d + 'T00:00:00Z'); return x.getUTCDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][x.getUTCMonth()]; }
+
+    // ---------- Summary
+    {
+      const k = result.kpi[0], ex = PL.filter((p) => p.exec === 'Yes');
+      const acts = {}; VV.forEach((v) => { acts[v.act] = (acts[v.act] || 0) + 1; });
+      const rows = [
+        [T(`Effective Call Analysis — Region 5 B2B, ${per}`)],
+        [S(`Source: ${info.file || 'Billing file'} (Plan Visit, Data Tracking Visit, Billing Sales B2B${m.target && m.target.has_target ? ', Target' : ''}). Sales = Total Nett Amount No Tax, billing type ZF2. Downloaded ${info.generated}.`)],
+        [],
+        [SEC('1. Plan vs Actual'), null, SEC('Visit/Call reconciliation'), { v: 'Count', s: 'bold' }],
+        ['Planned dealer visits (Plan Visit rows)', N(PL.length), 'Plan Executed (plans completed)', N(ex.length)],
+        ['Plans executed (Visit/Call logged same day, same salesman, same dealer)', N(ex.length), 'Plus: extra check-ins on an executed plan', N(k.extra)],
+        ['Plan compliance %', P(ratio(ex.length, PL.length)), 'Plus: unplanned Visit/Call', N(k.unplanned)],
+        ['   …executed as Visit', N(ex.filter((p) => p.via === 'Visit').length), 'Equals: Total Visit + Call', N(ex.length + k.extra + k.unplanned)],
+        ['   …executed as Call', N(ex.filter((p) => p.via === 'Call').length), 'Check vs Data Tracking Visit (should be 0)', N(ex.length + k.extra + k.unplanned - VC.length)],
+        ['Plans NOT executed', N(PL.length - ex.length), 'Source file "Status Visit" = Visit (for reference)', N(PL.filter((p) => p.status === 'Visit').length)],
+        ['Visit/Call logged that were NOT in the plan (unplanned)', N(k.unplanned), "Extra check-in = 2nd+ Visit/Call at a dealer already in that day's plan."],
+        ['Unplanned share of all Visit/Call', P(ratio(k.unplanned, VC.length))],
+        [],
+        [SEC('2. Activity mix (Data Tracking Visit, column Aktivitas)')],
+        ...Object.entries(acts).sort((a, b) => b[1] - a[1]).map(([a, n]) => [a, N(n)]),
+        tot(['Total check-ins', N(VV.length)]),
+        [],
+        [SEC('3. Effective Call (EC)'), { v: 'Count', s: 'bold' }, { v: '% of Visit+Call', s: 'bold' }],
+        ['Total Visit + Call', N(VC.length)],
+        ['EC Same Day (billing same salesman → same dealer, same day)', N(k.ec_same_day), P(k.ec_same_day_pct)],
+        ['EC Same Week (billing in the same Mon–Sun week)', N(k.ec_same_week), P(k.ec_same_week_pct)],
+        ['Forward EC (billing on or after the visit day, same week)', N(k.ec_forward), P(k.ec_forward_pct)],
+        ['EC target (Visit + Call that are EC same day)', P(0.5)],
+        ['EC same day still needed to reach target', N(Math.max(0, Math.ceil(0.5 * VC.length - 1e-9) - k.ec_same_day))],
+        [],
+        [SEC('4. Sales (Rp, no tax)'), { v: 'Rp', s: 'bold' }, { v: '% of total', s: 'bold' }],
+        ['Total salesman sales (ZF2)', R(k.sales_total)],
+        ['Sales from Same-Day EC', R(k.sales_same_day_ec), P(k.pct_sales_same_day_ec)],
+        ['Sales from Same-Week EC', R(k.sales_same_week_ec), P(k.pct_sales_same_week_ec)]
+      ];
+      if (m.target && m.target.has_target) {
+        const t = m.target.by_brand[0];
+        rows.push([], [SEC('5. Target dealers')], ['Salesman + dealer pairs with a target', N(t.dealers)], ['…of which no billing yet this month', N(t.open_dealers)],
+          ['Target at dealers with no billing yet (Rp)', R(t.open_target)], ['…of which not visited this month', N(t.open_not_visited)]);
+      }
+      sheets.push({ name: 'Summary', rows, cols: [62, 16, 44, 14] });
+    }
+
+    // ---------- By Brand & Week
+    {
+      const rows = [[T(`Effective Call by Brand and by Week — ${per}`)], [S(`Weeks run Monday–Sunday (${wkLabel}). Plan Executed + Extra Check-ins + Unplanned = Total Visit+Call.`)], [],
+        [H('Brand'), ...MH.map(H)]];
+      brandsAll.forEach((b) => rows.push([b, ...metrics(VC.filter((v) => v.brand === b), PL.filter((p) => p.brand === b), S2.filter((s) => s.sbrand === b))]));
+      rows.push(tot(['TOTAL', ...metrics(VC, PL, S2)]), [], [SEC('By Week')], [H('Week'), ...MH.map(H)]);
+      weeks.forEach((w) => rows.push([w, ...metrics(VC.filter((v) => v.w === w), PL.filter((p) => p.w === w), S2.filter((s) => s.w === w))]));
+      rows.push(tot(['TOTAL', ...metrics(VC, PL, S2)]));
+      sheets.push({ name: 'By Brand & Week', rows, cols: [18, ...MH.map(() => 15)], freeze: 'B5' });
+    }
+
+    // ---------- Brand by Week (matrices + full table)
+    {
+      const rows = [[T(`Weekly Effective Call by Brand — ${per}`)], [S(`Brand = salesman brand. ${wkLabel}.`)], []];
+      const mat = (title, f, fmt) => {
+        rows.push([SEC(title)], [H(title), ...weeks.map(H), H('Month')]);
+        [...BR, 'TOTAL'].forEach((b) => {
+          const pick = (w) => { const v = VC.filter((x) => (b === 'TOTAL' || x.brand === b) && (!w || x.w === w)), p = PL.filter((x) => (b === 'TOTAL' || x.brand === b) && (!w || x.w === w)), s = S2.filter((x) => (b === 'TOTAL' || x.sbrand === b) && (!w || x.w === w)); return f(v, p, s); };
+          const r = [b, ...weeks.map((w) => fmt(pick(w))), fmt(pick(null))];
+          rows.push(b === 'TOTAL' ? tot(r) : r);
+        });
+        rows.push([]);
+      };
+      mat('EC Same Week %', (v) => ratio(sum(v, (x) => x.ecw), v.length), P);
+      mat('EC Same Day %', (v) => ratio(sum(v, (x) => x.ecd), v.length), P);
+      mat('Plan Compliance %', (v, p) => ratio(p.filter((x) => x.exec === 'Yes').length, p.length), P);
+      mat('% Sales from Same-Day EC', (v, p, s) => ratio(sum(s.filter((x) => x.q), (x) => x.net), sum(s, (x) => x.net)), P);
+      mat('Total Visit+Call', (v) => v.length, N);
+      rows.push([SEC('Full table — brand × week')], [H('Brand'), H('Week'), ...MH.map(H)]);
+      BR.forEach((b) => weeks.forEach((w) => rows.push([b, w, ...metrics(VC.filter((v) => v.brand === b && v.w === w), PL.filter((p) => p.brand === b && p.w === w), S2.filter((s) => s.sbrand === b && s.w === w))])));
+      sheets.push({ name: 'Brand by Week', rows, cols: [22, 10, ...MH.map(() => 14)] });
+    }
+
+    // ---------- By Salesman
+    {
+      const rows = [[T(`Effective Call by Salesman — ${per}`)], [S('Plan compliance = planned dealer-days with a Visit/Call logged the same day. Effective Call = same salesman billed the same dealer (ZF2) on the same day / same Mon–Sun week.')], [],
+        [H('Sales ID'), H('Salesman Name'), H('Brand'), ...MH.map(H)]];
+      const ids = result.salesmen.slice().sort((a, b) => BR.indexOf(a.brand) - BR.indexOf(b.brand) || b.visit_call - a.visit_call);
+      ids.forEach((sm) => rows.push([sm.sales_id, sm.salesman, sm.brand, ...metrics(VC.filter((v) => v.sid === sm.sales_id), PL.filter((p) => p.sid === sm.sales_id), S2.filter((s) => s.sid === sm.sales_id))]));
+      const noId = VC.filter((v) => !v.sid.startsWith('ID'));
+      if (noId.length) rows.push(['(no ID)', '(no Sales ID)', '', ...metrics(noId, [], [])]);
+      rows.push(tot(['TOTAL', '', '', ...metrics(VC, PL, S2)]));
+      sheets.push({ name: 'By Salesman', rows, cols: [12, 30, 10, ...MH.map(() => 14)], freeze: 'D5', autofilter: `A4:${String.fromCharCode(67 + MH.length)}${4 + ids.length}` });
+    }
+
+    // ---------- Unplanned EC
+    {
+      const grp = (v, s1, s2) => [N(v.length), P(ratio(v.length, VC.length)), N(sum(v, (x) => x.ecd)), P(ratio(sum(v, (x) => x.ecd), v.length)), N(sum(v, (x) => x.ecw)), P(ratio(sum(v, (x) => x.ecw), v.length)), s1 === undefined ? null : R(s1), s2 === undefined ? null : R(s2)];
+      const pl = VC.filter((v) => v.plan === 'Planned'), up = VC.filter((v) => v.plan === 'Unplanned');
+      const rows = [[T('Effective Call — Unplanned Visits/Calls')], [S("Unplanned = Visit/Call at a dealer that was not in the salesman's plan for that day.")], [], [SEC('A. Planned vs unplanned Visit/Call')],
+        [H('Group'), H('Visit+Call'), H('Share of all'), H('EC Same Day'), H('EC Same Day %'), H('EC Same Week'), H('EC Same Week %'), H('Sales linked Same Day (Rp)'), H('Sales linked Same Week (Rp)')],
+        ['Planned', ...grp(pl, sum(S2.filter((b) => b.pd), (b) => b.net), sum(S2.filter((b) => b.pw), (b) => b.net))],
+        ['Unplanned', ...grp(up, sum(S2.filter((b) => b.ud), (b) => b.net), sum(S2.filter((b) => b.uw), (b) => b.net))],
+        ['   …Moved day (same week)', ...grp(up.filter((v) => v.utype === 'Moved day (same week)'))],
+        ['         ↳ already visited as planned, visited again', ...grp(up.filter((v) => v.msub === 'Revisit after planned visit'))],
+        ['         ↳ already visited (not as planned), visited again', ...grp(up.filter((v) => v.msub === 'Revisit after unplanned visit'))],
+        ['         ↳ first visit of the week, not on the planned day', ...grp(up.filter((v) => v.msub === 'First visit of the week'))],
+        ['   …Planned in other week', ...grp(up.filter((v) => v.utype === 'Planned in other week'))],
+        ['   …Not in plan', ...grp(up.filter((v) => v.utype === 'Not in plan'))],
+        tot(['TOTAL', ...grp(VC)]),
+        [S('Sales linked = ZF2 billing to that dealer by that salesman on the visit day / in the visit week. A dealer-week with both a planned and an unplanned visit counts in both rows.')],
+        [], [SEC('B. Unplanned by brand')],
+        [H('Brand'), H('Unplanned Visit+Call'), H('Share of brand Visit+Call'), H('EC Same Day'), H('EC Same Day %'), H('EC Same Week'), H('EC Same Week %'), H('Moved day'), H('Planned other week'), H('Not in plan')]];
+      [...brandsAll].forEach((b) => {
+        const all = VC.filter((v) => v.brand === b), u = all.filter((v) => v.plan === 'Unplanned');
+        rows.push([b, N(u.length), P(ratio(u.length, all.length)), N(sum(u, (x) => x.ecd)), P(ratio(sum(u, (x) => x.ecd), u.length)), N(sum(u, (x) => x.ecw)), P(ratio(sum(u, (x) => x.ecw), u.length)),
+          N(u.filter((v) => v.utype === 'Moved day (same week)').length), N(u.filter((v) => v.utype === 'Planned in other week').length), N(u.filter((v) => v.utype === 'Not in plan').length)]);
+      });
+      rows.push([], [SEC('C. Unplanned by week')], [H('Week'), H('Unplanned Visit+Call'), H('Share of week Visit+Call'), H('EC Same Day'), H('EC Same Day %'), H('EC Same Week'), H('EC Same Week %')]);
+      weeks.forEach((w) => { const all = VC.filter((v) => v.w === w), u = all.filter((v) => v.plan === 'Unplanned'); rows.push([w, N(u.length), P(ratio(u.length, all.length)), N(sum(u, (x) => x.ecd)), P(ratio(sum(u, (x) => x.ecd), u.length)), N(sum(u, (x) => x.ecw)), P(ratio(sum(u, (x) => x.ecw), u.length))]); });
+      sheets.push({ name: 'Unplanned EC', rows, cols: [52, 14, 14, 13, 14, 13, 14, 20, 20, 12] });
+    }
+
+    // ---------- EC Timing
+    {
+      const ecw = VC.filter((v) => v.ecw);
+      const cat = [['Billed on the visit day', (v) => v.sd > 0, 'Yes'], ['Billed 1+ days after the visit only', (v) => !(v.sd > 0) && v.after > 0 && !(v.before > 0), 'Yes'],
+        ['Billed both before and after the visit', (v) => !(v.sd > 0) && v.after > 0 && v.before > 0, 'Yes'], ['Billed only BEFORE the visit', (v) => !(v.sd > 0) && !(v.after > 0) && v.before > 0, 'No']];
+      const rows = [[T('EC Same Week — did the sale happen before or after the visit?')], [S('Forward EC = billing on the visit day or later in the same week, i.e. the visit could have driven it.')], [],
+        [SEC('A. Same-week effective Visits/Calls by timing of the sale')], [H('Timing'), H('Visit+Call'), H('Share of all Visit+Call'), H('Share of EC Same Week'), H('Counts as forward EC?')]];
+      cat.forEach(([l, f, y]) => { const n = ecw.filter(f).length; rows.push([l, N(n), P(ratio(n, VC.length)), P(ratio(n, ecw.length)), y]); });
+      rows.push(tot(['Total EC Same Week', N(ecw.length), P(ratio(ecw.length, VC.length)), P(1)]), ['No billing that week', N(VC.length - ecw.length), P(ratio(VC.length - ecw.length, VC.length))],
+        tot(['Total Visit+Call', N(VC.length), P(1)]), [], ['Forward EC (on/after visit day)', N(sum(VC, (x) => x.fwd)), P(ratio(sum(VC, (x) => x.fwd), VC.length)), P(ratio(sum(VC, (x) => x.fwd), ecw.length))], []);
+      rows.push([SEC('B. Sales billed to dealers visited that week, by billing day vs visit (Rp)')], [H('Billed'), ...['All', ...BR].map((b) => H(b === 'All' ? 'All brands' : b)), H('Share (all)')]);
+      const tm = result.timing.filter((r) => !r.sales_id);
+      [...new Set(tm.map((r) => r.billed))].forEach((lab) => rows.push([lab, ...['All', ...BR].map((b) => R((tm.find((r) => r.brand === b && r.billed === lab) || {}).sales || 0)), P((tm.find((r) => r.brand === 'All' && r.billed === lab) || {}).share || 0)]));
+      sheets.push({ name: 'EC Timing', rows, cols: [44, 16, 18, 18, 18, 16, 16] });
+    }
+
+    // ---------- Hasil Visit
+    {
+      const rows = [[T('Effective Call by Hasil Visit (visit outcome logged by salesman)')], [S('Visit + Call rows only.')], [],
+        [H('Hasil Visit'), H('Visit'), H('Call'), H('Total'), H('EC Same Day'), H('EC Same Day %'), H('EC Same Week'), H('EC Same Week %')]];
+      const hs = {}; VC.forEach((v) => { (hs[v.hasil] = hs[v.hasil] || []).push(v); });
+      const line = (l, v) => [l, N(v.filter((x) => x.act === 'Visit').length), N(v.filter((x) => x.act === 'Call').length), N(v.length), N(sum(v, (x) => x.ecd)), P(ratio(sum(v, (x) => x.ecd), v.length)), N(sum(v, (x) => x.ecw)), P(ratio(sum(v, (x) => x.ecw), v.length))];
+      Object.entries(hs).sort((a, b) => b[1].length - a[1].length).forEach(([h, v]) => rows.push(line(h, v)));
+      rows.push(tot(line('TOTAL', VC)));
+      sheets.push({ name: 'Hasil Visit', rows, cols: [26, 10, 10, 10, 13, 14, 13, 14] });
+    }
+
+    // ---------- Products Sold
+    {
+      const rows = [[T(`What was sold when a Visit/Call converted — ${per}`)], [S('Billing lines (ZF2) where the same salesman visited/called that dealer on the billing day (Same Day) or in the same Mon–Sun week (Same Week). Rp = no tax.')], []];
+      const PH = ['Same Day Qty', 'Same Day Sales (Rp)', 'Same Day Share', 'Same Week Qty', 'Same Week Sales (Rp)', 'Same Week Share', 'All Sales (Rp)', 'Same-Week EC % of All'];
+      const sdT = sum(S2.filter((b) => b.q), (b) => b.net), swT = sum(S2.filter((b) => b.r), (b) => b.net);
+      const block = (title, keyf, limit) => {
+        rows.push([SEC(title)], [H(title.replace('By ', '')), ...PH.map(H)]);
+        const g = {}; S2.forEach((b) => { const k = keyf(b) || '(blank)'; (g[k] = g[k] || []).push(b); });
+        let ent = Object.entries(g).map(([k, a]) => [k, a, sum(a.filter((b) => b.r), (b) => b.net)]).sort((a, b) => b[2] - a[2]);
+        if (limit) ent = ent.slice(0, limit);
+        ent.forEach(([k, a]) => { const d = a.filter((b) => b.q), w = a.filter((b) => b.r), all = sum(a, (b) => b.net), ws = sum(w, (b) => b.net);
+          rows.push([k, N(sum(d, (b) => b.qty)), R(sum(d, (b) => b.net)), P(ratio(sum(d, (b) => b.net), sdT)), N(sum(w, (b) => b.qty)), R(ws), P(ratio(ws, swT)), R(all), P(ratio(ws, all))]); });
+        if (!limit) { const d = S2.filter((b) => b.q), w = S2.filter((b) => b.r), all = sum(S2, (b) => b.net); rows.push(tot(['TOTAL', N(sum(d, (b) => b.qty)), R(sdT), P(1), N(sum(w, (b) => b.qty)), R(swT), P(1), R(all), P(ratio(swT, all))])); }
+        rows.push([]);
+      };
+      block('By Product Brand', (b) => b.pbrand);
+      block('By Item Group', (b) => b.ig);
+      block('By Article (top 50 by same-week sales)', (b) => b.desc, 50);
+      sheets.push({ name: 'Products Sold', rows, cols: [52, 13, 20, 13, 14, 20, 14, 20, 16] });
+    }
+
+    // ---------- Check-in Tambahan
+    {
+      const rows = [[T('Extra check-ins (2nd+ Visit/Call on an executed plan)')], [S('Same salesman, same dealer, same planned day. Ordered by check-in time.')], [],
+        [H('Date'), H('Sales ID'), H('Salesman'), H('Brand'), H('Dealer Code'), H('Dealer'), H('Check-in #'), H('First check-in'), H('First activity'), H('This check-in'), H('Minutes after first'), H('Activity'), H('Hasil Visit'), H('EC Same Day')]];
+      result.extra_checkins.forEach((r) => rows.push([D(Math.round(Date.parse(r.date) / 864e5) + 25569), r.sales_id, r.salesman, r.brand, r.dealer_code, r.dealer, N(r.nth), r.first_time, r.first_activity, r.time, N(r.gap_min), r.activity, r.hasil_visit, r.effective_same_day]));
+      sheets.push({ name: 'Extra Check-ins', rows, cols: [12, 12, 28, 10, 12, 32, 10, 12, 12, 12, 12, 10, 18, 11], freeze: 'A5', autofilter: `A4:N${4 + result.extra_checkins.length}` });
+    }
+
+    // ---------- Target (no purchase yet)
+    if (m.target && m.target.has_target) {
+      const rows = [[T('Target dealers with no purchase yet')], [S('Salesman + dealer pairs with a target this month (Target sheet) and no ZF2 billing from that salesman to that dealer since the 1st.')], [],
+        [H('Brand'), H('Target dealers'), H('Target (Rp)'), H('No billing yet'), H('Target at those dealers (Rp)'), H('…not visited this month')]];
+      m.target.by_brand.forEach((t) => { const r = [t.brand === 'All' ? 'TOTAL' : t.brand, N(t.dealers), R(t.target), N(t.open_dealers), R(t.open_target), N(t.open_not_visited)]; rows.push(t.brand === 'All' ? tot(r) : r); });
+      rows.push([], [H('Sales ID'), H('Salesman'), H('Brand'), H('Dealer Code'), H('Dealer'), H('Target (Rp)'), H('Planned visits'), H('Visit + Call'), H('Last visit')]);
+      const h = rows.length;
+      result.target_open.forEach((r) => rows.push([r.sales_id, r.salesman, r.brand, r.dealer_code, r.dealer, R(r.target), N(r.planned_visits), N(r.visit_call), r.last_visit ? D(Math.round(Date.parse(r.last_visit) / 864e5) + 25569) : 'Not visited']));
+      sheets.push({ name: 'Target No Purchase', rows, cols: [12, 28, 10, 12, 36, 18, 14, 12, 12], autofilter: `A${h}:I${h + result.target_open.length}` });
+    }
+
+    // ---------- detail sheets
+    sheets.push({ name: 'Plan vs Actual', freeze: 'A2', autofilter: `A1:N${PL.length + 1}`, cols: [12, 7, 10, 12, 28, 11, 32, 12, 14, 24, 12, 10, 14, 14],
+      rows: [['PJP Date', 'Week', 'Brand', 'Sales ID', 'Sales Name', 'BP Code', 'Dealer', 'Dealer Type', 'Source', 'Key', 'Executed? (Visit/Call on same day)', 'Executed via', 'Visited in same week (any day)?', 'Status Visit (from source file)'].map(H),
+        ...PL.map((p) => [D(p.d), p.w, p.brand, p.sid, p.name, p.dealer, p.dname, p.dtype, p.src, p.key, p.exec, p.via, p.sameWeek, p.status])] });
+    const timing = (v) => (!v.ecw ? '' : v.sd > 0 ? 'Billed on visit day' : v.after > 0 && v.before > 0 ? 'Before and after' : v.after > 0 ? 'After visit only' : 'Before visit only');
+    sheets.push({ name: 'Visit Detail', freeze: 'A2', autofilter: `A1:Z${VV.length + 1}`, cols: [12, 7, 12, 26, 10, 11, 30, 9, 18, 8, 24, 22, 12, 16, 9, 16, 9, 40, 9, 24, 16, 16, 18, 9, 9, 30],
+      rows: [['Visit Date', 'Week', 'Sales ID', 'Salesman Name', 'Salesman Brand', 'Dealer Code', 'Dealer Name', 'Aktivitas', 'Hasil Visit', 'Durasi', 'Key (Day+Sales+Dealer)', 'Week Key', 'In Plan Visit?',
+        'Same-Day Sales (Rp)', 'Effective Call Same Day (1/0)', 'Same-Week Sales (Rp)', 'Effective Call Same Week (1/0)', 'Keterangan Hasil Visit', 'Extra check-in (1/0)', 'Unplanned Type', 'Sales before visit (Rp)', 'Sales after visit (Rp)', 'EC Week Timing', 'Forward EC (1/0)', 'Check-in Time', 'Moved-day Sub-type'].map(H),
+        ...VV.map((v) => [D(v.d), v.w, v.sid, v.name, v.brand, v.dealer, v.dname, v.act, v.hasil, { v: v.dur, s: 'time' }, v.key, v.wk, v.plan, R(v.sd), v.ecd, R(v.sw), v.ecw, (v.ket || '').slice(0, 32000), v.extra, v.utype, R(v.before), R(v.after), timing(v), v.fwd, { v: v.t - Math.floor(v.t), s: 'time' }, v.msub])] });
+    sheets.push({ name: 'Billing Data', freeze: 'A2', autofilter: `A1:X${BL.length + 1}`, cols: [12, 7, 8, 12, 26, 10, 11, 30, 12, 40, 18, 12, 7, 16, 24, 22, 9, 9, 9, 9, 9, 9, 16, 10],
+      rows: [['Billing Date', 'Week', 'Billing Type', 'Sales ID', 'Salesman Name', 'Salesman Brand', 'Dealer Code', 'Dealer Name', 'Article Code', 'Article Description', 'Item Group', 'Product Brand', 'Qty', 'Nett Amount No Tax (Rp)',
+        'Key (Day+Sales+Dealer)', 'Week Key', 'Visit/Call same day (1/0)', 'Visit/Call same week (1/0)', 'Unplanned visit same day (1/0)', 'Unplanned visit same week (1/0)', 'Planned visit same day (1/0)', 'Planned visit same week (1/0)', 'Timing vs visit', 'Days since last visit'].map(H),
+        ...BL.map((b) => [D(b.d), b.w, b.type, b.sid, b.sname, b.sbrand, b.dealer, b.dname, b.art, b.desc, b.ig, b.pbrand, N(b.qty), R(b.net), b.key, b.wk, b.q, b.r, b.ud, b.uw, b.pd, b.pw, b.timing, b.since === null ? '' : b.since])] });
+    return sheets;
+  }
+  root.ecBuildWorkbook = build;
+  if (typeof module !== 'undefined') module.exports = { build };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Excel download: builds the analysis workbook from the result + row detail.
+window.ecExcel = async function (result, detail, fileName) {
+  const m = result.meta;
+  const a = new Date(m.period_start + 'T00:00:00Z'), b = new Date(m.latest_billing_date + 'T00:00:00Z');
+  const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const per = `${MON[b.getUTCMonth()]} ${b.getUTCFullYear()} (${a.getUTCDate()}–${b.getUTCDate()} ${MON[b.getUTCMonth()].slice(0, 3)})`;
+  const now = new Date(), gen = now.getDate() + ' ' + MON[now.getMonth()].slice(0, 3) + ' ' + now.getFullYear() + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  const sheets = window.ecBuildWorkbook(result, detail, { period: per, file: fileName, generated: gen });
+  const bytes = await window.writeXlsx(sheets);
+  const name = `Effective_Call_Analysis_${MON[b.getUTCMonth()].slice(0, 3)}${b.getUTCFullYear()}_${a.getUTCDate()}-${b.getUTCDate()}.xlsx`;
+  return { bytes, name };
+};
+</script>
+
 <script>
 // Small stand-in for the data layer: the page's charts read results through dash.data(id).
 window.dash = (function () {
@@ -767,7 +1151,7 @@ window.dash = (function () {
     k.data.forEach((r) => {
       const tr = document.createElement('tr'); tr.dataset.key = r.brand; tr.className = 'click' + (r.brand === b ? ' sel' : '');
       [r.brand === 'All' ? 'Semua' : r.brand, int(r.planned), pct(r.compliance), int(r.executed), int(r.extra), int(r.unplanned), int(r.visit_call), pct(r.ec_same_day_pct), pct(r.ec_same_week_pct), pct(r.ec_forward_pct), pct(r.pct_sales_same_day_ec), rpB(r.sales_total)]
-        .forEach((t, i) => { const td = document.createElement('td'); td.textContent = t; if (i === 7) td.className = tgtClass(r.ec_same_day_pct); tr.appendChild(td); });
+        .forEach((t, i) => { const td = document.createElement('td'); td.textContent = t; if (i === 7) td.className = window.ecFmt.tgtClass(r.ec_same_day_pct); tr.appendChild(td); });
       tb.appendChild(tr);
     });
   });
@@ -1123,7 +1507,12 @@ window.dash = (function () {
   const fmtD = (iso) => d3.utcFormat('%-d %b %Y')(new Date(iso.slice(0, 10) + 'T00:00:00Z'));
   const fmtT = (iso) => d3.timeFormat('%-d %b %Y, %H:%M')(new Date(iso));
   const KEY = 'ec-dashboard-v1';
-  let current = null; // { doc, result, source }
+  let current = null; // { doc, result, detail, source }
+  // IndexedDB keeps the full upload (incl. row detail for the Excel download) in this browser
+  const idb = () => new Promise((res, rej) => { const r = indexedDB.open('ec-dashboard', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  const idbGet = async (k) => { const d = await idb(); return new Promise((res, rej) => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); };
+  const idbSet = async (k, v) => { const d = await idb(); return new Promise((res, rej) => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); };
+  const idbDel = async (k) => { const d = await idb(); return new Promise((res) => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').delete(k); t.oncomplete = () => res(); t.onerror = () => res(); }); };
 
   function period(meta) {
     const a = new Date(meta.period_start + 'T00:00:00Z'), b = new Date(meta.latest_billing_date + 'T00:00:00Z');
@@ -1135,11 +1524,11 @@ window.dash = (function () {
     document.querySelectorAll('.period-short').forEach((x) => { x.textContent = p.short; });
     const wn = $('weeknote'); if (wn) wn.textContent = m.weeks.map((w) => w.week + ' = ' + d3.utcFormat('%-d')(new Date(w.from + 'T00:00:00Z')) + '–' + d3.utcFormat('%-d %b')(new Date(w.to + 'T00:00:00Z'))).join(', ') + '.';
     $('src-line').textContent = 'Data ' + p.long + ' dari ' + (doc.file_name || 'file billing') + (doc.uploaded_at ? ', diproses ' + fmtT(doc.uploaded_at) : '') + (source === 'local' ? ' (tersimpan di browser ini).' : ' (data.json).');
-    $('dl-btn').hidden = false; $('clear-btn').hidden = source !== 'local';
+    $('dl-btn').hidden = false; $('clear-btn').hidden = source !== 'local'; $('xl-row').hidden = !(current && current.detail);
   }
   function setEmpty(on) { empty.hidden = !on; main.hidden = on; }
-  function use(doc, result, source) {
-    current = { doc, result, source };
+  function use(doc, result, source, detail) {
+    current = { doc, result, source, detail: detail || null };
     setEmpty(false); dash._set({ status: 'ok', result }); showSource(doc, result, source);
   }
 
@@ -1155,10 +1544,11 @@ window.dash = (function () {
       const miss = Object.entries({ 'Plan Visit': WANT.plan, 'Data Tracking Visit': WANT.track, 'Billing Sales B2B …': WANT.bill }).filter(([, re]) => !pick(re)).map(([n]) => n);
       if (miss.length) throw new Error('Sheet tidak ditemukan: ' + miss.join(', ') + '. Sheet di file ini: ' + wb.sheetNames.join(', ') + '.');
       say('Menghitung effective call…'); await new Promise((r) => setTimeout(r, 30));
-      const result = window.ecCompute({ plan: wb.rows[pick(WANT.plan)], track: wb.rows[pick(WANT.track)], bill: wb.rows[pick(WANT.bill)], target: pick(WANT.target) ? wb.rows[pick(WANT.target)] : null });
+      const full = window.ecCompute({ plan: wb.rows[pick(WANT.plan)], track: wb.rows[pick(WANT.track)], bill: wb.rows[pick(WANT.bill)], target: pick(WANT.target) ? wb.rows[pick(WANT.target)] : null }, { detail: true });
+      const { detail, ...result } = full;
       const doc = { file_name: file.name, uploaded_at: new Date().toISOString() };
-      try { localStorage.setItem(KEY, JSON.stringify({ doc, result })); } catch (e) { /* storage full or blocked: still show it */ }
-      use(doc, result, 'local');
+      try { await idbSet(KEY, { doc, result, detail }); } catch (e) { /* storage blocked: still show it */ }
+      use(doc, result, 'local', detail);
       say('Selesai. Data sekarang sampai ' + fmtD(result.meta.latest_billing_date) + ' (' + d3.format(',')(result.meta.rows.billing) + ' baris billing, ' + d3.format(',')(result.meta.rows.tracking) + ' check-in, ' + d3.format(',')(result.meta.rows.plan) + ' plan' + (result.meta.target && result.meta.target.has_target ? ', ' + d3.format(',')(result.meta.target.rows) + ' baris target' : ', tanpa sheet Target') + ').', 'ok');
     } catch (e) {
       say((e && e.message) || 'File tidak bisa diproses.', 'err');
@@ -1169,25 +1559,39 @@ window.dash = (function () {
 
   $('dl-btn').addEventListener('click', () => {
     if (!current) return;
-    const blob = new Blob([JSON.stringify({ doc: current.doc, result: current.result })], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ doc: current.doc, result: current.result, detail: current.detail })], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'data.json';
     document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   });
-  $('clear-btn').addEventListener('click', () => {
+  $('clear-btn').addEventListener('click', async () => {
     try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+    try { await idbDel(KEY); } catch (e) { /* ignore */ }
     say('Data di browser ini dihapus.'); boot();
   });
 
   async function boot() {
     let local = null, shared = null;
-    try { const t = localStorage.getItem(KEY); if (t) local = JSON.parse(t); } catch (e) { local = null; }
+    try { local = await idbGet(KEY); } catch (e) { local = null; }
+    if (!local) { try { const t = localStorage.getItem(KEY); if (t) local = JSON.parse(t); } catch (e) { local = null; } }
     try { const r = await fetch('data.json', { cache: 'no-store' }); if (r.ok) shared = await r.json(); } catch (e) { shared = null; }
     const ts = (x) => (x && x.doc && x.doc.uploaded_at) || '';
     const pickL = local && local.result && (!shared || ts(local) >= ts(shared));
-    if (pickL) use(local.doc, local.result, 'local');
-    else if (shared && shared.result) use(shared.doc || {}, shared.result, 'shared');
+    if (pickL) use(local.doc, local.result, 'local', local.detail);
+    else if (shared && shared.result) use(shared.doc || {}, shared.result, 'shared', shared.detail);
     else { current = null; dash._set({ status: 'missing', result: null }); setEmpty(true); $('src-line').textContent = 'Belum ada data. Upload file Billing bulanan untuk mulai.'; $('dl-btn').hidden = true; $('clear-btn').hidden = true; }
   }
+  const xlBtn = $('xl-btn'), xlSt = $('xl-status');
+  xlBtn.addEventListener('click', async () => {
+    if (!current || !current.detail) return;
+    xlBtn.setAttribute('aria-disabled', 'true'); xlSt.className = ''; xlSt.textContent = 'Menyiapkan Excel…';
+    try {
+      const { bytes, name } = await window.ecExcel(current.result, current.detail, current.doc.file_name);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = name;
+      document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      xlSt.textContent = 'Excel diunduh: ' + name;
+    } catch (e) { xlSt.textContent = (e && e.message) || 'Excel gagal dibuat.'; xlSt.className = 'err'; }
+    finally { xlBtn.removeAttribute('aria-disabled'); }
+  });
   boot();
 })();
 </script>
