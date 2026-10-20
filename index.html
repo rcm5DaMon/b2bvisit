@@ -54,6 +54,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
 .empty{background:var(--color-panel);border:1px dashed var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-lg);font-size:var(--cds-font-size-body);line-height:1.5;max-width:46rem}
 .empty b{font-weight:600}
 .ec #brand-card,.ec #weekly-card{grid-column:1/-1}
+.ec #target-filter{margin-bottom:var(--cds-gap-sm)}
 .ec .xgrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));align-items:start}
 .ec .xgrid > div{min-width:0}
 .ec .xsub{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);margin-bottom:var(--cds-gap-sm)}
@@ -206,7 +207,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
   <div class="grid">
     <div class="card" id="unplanned-card">
       <h2>EC hari sama per jenis kunjungan</h2>
-      <p class="note">Pindah hari = dealer di-plan di hari lain pada minggu yang sama. Batang = EC hari sama; label = jumlah. Target EC 50%. <span class="bname">Semua brand</span>.</p>
+      <p class="note">Kunjungan dibagi: sesuai plan vs di luar plan. Baris ↳ adalah rincian kunjungan di luar plan. Pindah hari = dealer di-plan di hari lain pada minggu yang sama. Batang = EC hari sama; label = jumlah Visit/Call. Target EC 50%. <span class="bname">Semua brand</span>.</p>
       <div class="chart" id="unplanned-chart" data-source="unplanned"></div>
     </div>
     <div class="card" id="timing-card">
@@ -241,13 +242,17 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
   </div>
 
   <div class="card" id="target-card">
-    <h2>Dealer bertarget yang belum belanja</h2>
-    <p class="note">Pasangan salesman + dealer yang punya target bulan ini (sheet Target) tapi belum ada billing dari salesman tersebut ke dealer itu sejak tanggal 1. Target terbesar di atas. <span class="bname">Semua brand</span>.</p>
+    <h2>Target vs aktual per dealer</h2>
+    <p class="note">Pasangan salesman + dealer yang punya target bulan ini (sheet Target). Aktual = billing (no tax) dari salesman tersebut ke dealer itu sejak tanggal 1. Kurang = target − aktual. <span class="bname">Semua brand</span>.</p>
     <div class="tsum" id="target-sum"></div>
+    <div class="filters" id="target-filter" role="group" aria-label="Filter dealer bertarget">
+      <button class="chip" type="button" data-tf="below">Di bawah target</button><button class="chip" type="button" data-tf="none">Belum belanja</button><button class="chip" type="button" data-tf="met">Tercapai</button><button class="chip" type="button" data-tf="all">Semua dealer</button>
+    </div>
     <input class="search" id="target-search" type="search" placeholder="Cari dealer atau salesman" aria-label="Cari dealer bertarget">
-    <div class="scroll"><table id="target-table" data-source="target_open" data-row-key="sales_id,dealer_code">
-      <thead><tr><th data-field="salesman" class="l" data-k="salesman">Salesman</th><th data-field="brand" class="l" data-k="brand">Brand</th><th data-field="dealer" class="l" data-k="dealer">Dealer</th><th data-field="target" data-k="target">Target (Rp)</th><th data-field="planned_visits" data-k="planned_visits">Plan kunjungan</th><th data-field="visit_call" data-k="visit_call">Visit + Call</th><th data-field="last_visit" class="l" data-k="last_visit">Kunjungan terakhir</th></tr></thead>
+    <div class="scroll"><table id="target-table" data-source="target_dealers" data-row-key="sales_id,dealer_code">
+      <thead><tr><th data-field="salesman" class="l" data-k="salesman">Salesman</th><th data-field="brand" class="l" data-k="brand">Brand</th><th data-field="dealer" class="l" data-k="dealer">Dealer</th><th data-field="target" data-k="target">Target (Rp)</th><th data-field="actual" data-k="actual">Aktual (Rp)</th><th data-field="achievement" data-k="achievement">Pencapaian</th><th data-field="gap" data-k="gap">Kurang (Rp)</th><th data-field="planned_visits" data-k="planned_visits">Plan kunjungan</th><th data-field="visit_call" data-k="visit_call">Visit + Call</th><th data-field="last_visit" class="l" data-k="last_visit">Kunjungan terakhir</th></tr></thead>
       <tbody></tbody></table></div>
+    <p class="note" id="target-count"></p>
     <p class="note" id="target-none" hidden>Tidak ada sheet Target di file yang di-upload. Tambahkan sheet bernama Target (kolom UNIQ SC, BP, Dealer Name, Brand, GRAND TOTAL) lalu upload lagi.</p>
   </div>
   </section>
@@ -547,7 +552,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
 
 
     // ---- target dealers with no purchase yet (optional Target sheet)
-    let target_open = [], target_meta = { has_target: false };
+    let target_open = [], target_dealers = [], target_meta = { has_target: false };
     if (input.target && input.target.length) {
       const need = ['UNIQ SC', 'BP', 'Brand', 'GRAND TOTAL'];
       const tm = checkColumns(input.target, need, 'Target'); if (tm.length) throw new Error(tm.join(' '));
@@ -563,13 +568,21 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       const agg = new Map();
       Tg.forEach((t) => { const k = t.sid + '|' + t.dealer; const g = agg.get(k); if (g) { g.target += t.target; if (!g.brands.includes(t.brand)) g.brands.push(t.brand); } else agg.set(k, { ...t, brands: [t.brand] }); });
       const all = [...agg.values()];
+      const act = new Map(); S2.forEach((b) => { const k = b.sid + '|' + b.dealer; act.set(k, (act.get(k) || 0) + b.net); });
+      target_dealers = all.map((t) => {
+        const k = t.sid + '|' + t.dealer, g = vis.get(k), a = act.get(k) || 0;
+        return { sales_id: t.sid, salesman: names.get(t.sid) || t.sname, brand: t.brands.join(', '), dealer_code: t.dealer, dealer: t.dname, target: t.target, actual: a,
+          achievement: ratio(a, t.target), gap: Math.max(0, t.target - a), billed: bought.has(k) ? 'Yes' : 'No',
+          planned_visits: pl.get(k) || 0, visit_call: g ? g.n : 0, last_visit: g ? iso(g.last) : '' };
+      }).sort((a, b) => b.gap - a.gap || b.target - a.target);
       target_open = all.filter((t) => !bought.has(t.sid + '|' + t.dealer)).map((t) => {
         const k = t.sid + '|' + t.dealer, g = vis.get(k);
         return { sales_id: t.sid, salesman: names.get(t.sid) || t.sname, brand: t.brands.join(', '), dealer_code: t.dealer, dealer: t.dname, target: t.target,
           planned_visits: pl.get(k) || 0, visit_call: g ? g.n : 0, last_visit: g ? iso(g.last) : '' };
       }).sort((a, b) => b.target - a.target);
       const tb = ['All', ...BRANDS].map((br) => { const a = sub(all, (x) => x.brand, br), o = sub(target_open, (x) => x.brand, br);
-        return { brand: br, dealers: a.length, target: sum(a, (x) => x.target), open_dealers: o.length, open_target: sum(o, (x) => x.target), open_not_visited: o.filter((x) => !x.visit_call).length }; });
+        const ad = sub(target_dealers, (x) => x.brand, br), ac = sum(ad, (x) => x.actual);
+        return { brand: br, dealers: a.length, target: sum(a, (x) => x.target), actual: ac, achievement: ratio(ac, sum(a, (x) => x.target)), below_target: ad.filter((x) => x.actual < x.target).length, open_dealers: o.length, open_target: sum(o, (x) => x.target), open_not_visited: o.filter((x) => !x.visit_call).length }; });
       target_meta = { has_target: true, rows: Tg.length, by_brand: tb };
     }
     // ---- latest billing day
@@ -644,7 +657,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       ignored: { plan: input.plan.length - P.length, tracking: input.track.length - T.length, billing: input.bill.length - B.length }
     };
     meta.target = target_meta;
-    return { meta, kpi, weekly, unplanned, timing, salesmen, candidates, target_open, extra_checkins, daily_brand, daily_salesman, daily_visits, daily_missed, ...(detail ? { detail } : {}) };
+    return { meta, kpi, weekly, unplanned, timing, salesmen, candidates, target_open, target_dealers, extra_checkins, daily_brand, daily_salesman, daily_visits, daily_missed, ...(detail ? { detail } : {}) };
   }
   root.ecCompute = compute;
   root.ecRequired = REQ;
@@ -962,15 +975,15 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       sheets.push({ name: 'Extra Check-ins', rows, cols: [12, 12, 28, 10, 12, 32, 10, 12, 12, 12, 12, 10, 18, 11], freeze: 'A5', autofilter: `A4:N${4 + result.extra_checkins.length}` });
     }
 
-    // ---------- Target (no purchase yet)
+    // ---------- Target vs actual per dealer
     if (m.target && m.target.has_target) {
-      const rows = [[T('Target dealers with no purchase yet')], [S('Salesman + dealer pairs with a target this month (Target sheet) and no ZF2 billing from that salesman to that dealer since the 1st.')], [],
-        [H('Brand'), H('Target dealers'), H('Target (Rp)'), H('No billing yet'), H('Target at those dealers (Rp)'), H('…not visited this month')]];
-      m.target.by_brand.forEach((t) => { const r = [t.brand === 'All' ? 'TOTAL' : t.brand, N(t.dealers), R(t.target), N(t.open_dealers), R(t.open_target), N(t.open_not_visited)]; rows.push(t.brand === 'All' ? tot(r) : r); });
-      rows.push([], [H('Sales ID'), H('Salesman'), H('Brand'), H('Dealer Code'), H('Dealer'), H('Target (Rp)'), H('Planned visits'), H('Visit + Call'), H('Last visit')]);
+      const rows = [[T('Target vs actual per dealer')], [S('Salesman + dealer pairs with a target this month (Target sheet). Actual = ZF2 billing (no tax) from that salesman to that dealer since the 1st. Target is the full-month target.')], [],
+        [H('Brand'), H('Target dealers'), H('Target (Rp)'), H('Actual (Rp)'), H('Achievement %'), H('Dealers below target'), H('No billing yet'), H('Target at no-billing dealers (Rp)'), H('…not visited this month')]];
+      m.target.by_brand.forEach((t) => { const r = [t.brand === 'All' ? 'TOTAL' : t.brand, N(t.dealers), R(t.target), R(t.actual), P(t.achievement), N(t.below_target), N(t.open_dealers), R(t.open_target), N(t.open_not_visited)]; rows.push(t.brand === 'All' ? tot(r) : r); });
+      rows.push([], [H('Sales ID'), H('Salesman'), H('Brand'), H('Dealer Code'), H('Dealer'), H('Target (Rp)'), H('Actual (Rp)'), H('Achievement %'), H('Gap to target (Rp)'), H('Billed this month?'), H('Planned visits'), H('Visit + Call'), H('Last visit')]);
       const h = rows.length;
-      result.target_open.forEach((r) => rows.push([r.sales_id, r.salesman, r.brand, r.dealer_code, r.dealer, R(r.target), N(r.planned_visits), N(r.visit_call), r.last_visit ? D(Math.round(Date.parse(r.last_visit) / 864e5) + 25569) : 'Not visited']));
-      sheets.push({ name: 'Target No Purchase', rows, cols: [12, 28, 10, 12, 36, 18, 14, 12, 12], autofilter: `A${h}:I${h + result.target_open.length}` });
+      result.target_dealers.forEach((r) => rows.push([r.sales_id, r.salesman, r.brand, r.dealer_code, r.dealer, R(r.target), R(r.actual), P(r.achievement), R(r.gap), r.billed, N(r.planned_visits), N(r.visit_call), r.last_visit ? D(Math.round(Date.parse(r.last_visit) / 864e5) + 25569) : 'Not visited']));
+      sheets.push({ name: 'Target vs Actual', rows, cols: [12, 28, 10, 12, 36, 18, 18, 13, 18, 12, 12, 11, 12], freeze: `A${h + 1}`, autofilter: `A${h}:M${h + result.target_dealers.length}` });
     }
 
     // ---------- detail sheets
@@ -1083,15 +1096,14 @@ window.dash = (function () {
     ['planned', 'Total plan', null, 'Kunjungan dealer di PJP'],
     ['executed', 'Plan terlaksana', null, 'Plan yang ada Visit/Call di hari plan'],
     ['compliance', 'Kepatuhan plan', null, 'Plan terlaksana di hari plan'],
+    ['missed', 'Plan terlewat', null, 'Dealer di plan yang tidak dikunjungi di hari plan'],
+    ['extra', 'Check-in tambahan', null, 'Check-in ke-2 dst. pada plan yang terlaksana'],
+    ['unplanned', 'Di luar plan', null, 'Visit/Call yang tidak di-plan untuk hari itu'],
+    ['visit_call', 'Visit + Call', null, 'Terlaksana + Tambahan + Di luar plan'],
     ['ec_same_day', 'Jumlah EC hari sama', null, 'Visit/Call dengan billing di hari yang sama'],
     ['ec_same_day_pct', 'EC hari sama', null, 'Visit/Call dengan billing di hari yang sama'],
     ['sales_same_day_ec', 'Sales dari EC hari sama', null, ''],
-    ['pct_sales_same_day_ec', '% sales dari EC hari sama', null, 'Sales EC hari sama ÷ total sales'],
-    ['ec_same_week', 'Jumlah EC minggu sama', null, 'Visit/Call dengan billing di minggu yang sama'],
-    ['ec_same_week_pct', 'EC minggu sama', null, 'Billing di minggu yang sama (Sen–Min)'],
-    ['ec_forward_pct', 'EC setelah visit', null, 'Billing di hari kunjungan atau sesudahnya, minggu sama'],
-    ['extra', 'Check-in tambahan', null, 'Check-in ke-2 dst. pada plan yang terlaksana'],
-    ['visit_call', 'Visit + Call', null, 'Terlaksana + Tambahan + Di luar plan']
+    ['pct_sales_same_day_ec', '% sales dari EC hari sama', null, 'Sales EC hari sama ÷ total sales']
   ];
   const tiles = document.getElementById('kpis');
   TILES.forEach(([f, lab, sepF, hint]) => {
@@ -1137,7 +1149,8 @@ window.dash = (function () {
       const f = el.dataset.field;
       let v = row[f];
       if (v === undefined && (f === 'ec_same_day' || f === 'ec_same_week')) v = Math.round(row[f + '_pct'] * row.visit_call);
-      el.textContent = ['visit_call', 'planned', 'extra', 'executed', 'ec_same_day', 'ec_same_week'].includes(f) ? int(v) : f === 'sales_same_day_ec' ? 'Rp ' + rpM(v) : f === 'sales_total' ? rpM(v) : pct(v);
+      if (f === 'missed') v = row.planned - row.executed;
+      el.textContent = ['visit_call', 'planned', 'extra', 'executed', 'ec_same_day', 'ec_same_week', 'missed', 'unplanned'].includes(f) ? int(v) : f === 'sales_same_day_ec' ? 'Rp ' + rpM(v) : f === 'sales_total' ? rpM(v) : pct(v);
     });
     const tg = ecTarget(row), tEl = document.getElementById('tgt-mtd'), vEl = document.querySelector('#tile-ec_same_day_pct .val');
     tEl.textContent = row ? tg.text : ''; tEl.className = 'tgt' + (tg.ok === true ? ' good' : tg.ok === false ? ' bad' : '');
@@ -1230,9 +1243,16 @@ window.dash = (function () {
       ends.attr('x', (r) => x(val(r)) + 6);
     });
   }
-  hbars('unplanned-chart', 'unplanned', (rows, b) => window.ecFmt.pickRows(rows, b).sort((a, c) => a.order - c.order),
-    (r) => window.ecT(r.type), (r) => r.ec_same_day_pct, (r) => pct(r.ec_same_day_pct), (r) => '  · ' + int(r.visit_call),
-    (r) => r.type === 'Planned visit' ? 'var(--cds-chart-muted)' : dash.colors[0]);
+  hbars('unplanned-chart', 'unplanned', (rows, b) => {
+      // planned first, then all unplanned together, then the unplanned breakdown
+      const r = window.ecFmt.pickRows(rows, b).sort((a, c) => a.order - c.order);
+      const pl = r.filter((x) => x.type === 'Planned visit'), up = r.filter((x) => x.type !== 'Planned visit');
+      const n = up.reduce((t, x) => t + x.visit_call, 0), ec = up.reduce((t, x) => t + x.ec_same_day_pct * x.visit_call, 0);
+      return [...pl, { type: 'Unplanned (all)', visit_call: n, ec_same_day_pct: n ? ec / n : 0 }, ...up];
+    },
+    (r) => r.type === 'Planned visit' ? 'Sesuai plan (total)' : r.type === 'Unplanned (all)' ? 'Di luar plan (total)' : '   ↳ Di luar plan · ' + window.ecT(r.type),
+    (r) => r.ec_same_day_pct, (r) => pct(r.ec_same_day_pct), (r) => '  · ' + int(r.visit_call),
+    (r) => r.type === 'Planned visit' ? 'var(--cds-chart-muted)' : r.type === 'Unplanned (all)' ? dash.colors[1] : dash.colors[0]);
   hbars('timing-chart', 'timing', (rows, b) => window.ecFmt.pickRows(rows, b).sort((a, c) => a.order - c.order),
     (r) => window.ecT(r.billed), (r) => r.sales, (r) => 'Rp ' + d3.format(',.0f')(r.sales), (r) => '  · ' + pct(r.share),
     (r) => r.billed === 'Before visit' ? 'var(--cds-chart-status-critical)' : dash.colors[0]);
@@ -1297,37 +1317,41 @@ window.dash = (function () {
 </script>
 <script>
 (function () {
-  const { int, brandNow } = window.ecFmt;
+  const { int, pct, brandNow } = window.ecFmt;
   const rp = d3.format(',.0f'), fd = (d) => d ? d3.utcFormat('%-d %b')(new Date(d + 'T00:00:00Z')) : 'Belum dikunjungi';
   const tb = document.querySelector('#target-table tbody'), q = document.getElementById('target-search'), sumEl = document.getElementById('target-sum');
-  const none = document.getElementById('target-none'), wrapT = document.querySelector('#target-table').parentElement;
-  let sortK = 'target', asc = false;
+  const none = document.getElementById('target-none'), wrapT = document.querySelector('#target-table').parentElement, cnt = document.getElementById('target-count'), tfEl = document.getElementById('target-filter');
+  let sortK = 'gap', asc = false, tf = 'below';
+  tfEl.addEventListener('click', (e) => { const b = e.target.closest('[data-tf]'); if (b) { tf = b.dataset.tf; draw(); } });
   document.querySelectorAll('#target-table th').forEach((th) => th.addEventListener('click', () => {
     const k = th.dataset.k; if (sortK === k) asc = !asc; else { sortK = k; asc = ['salesman', 'brand', 'dealer'].includes(k); } draw();
   }));
   q.addEventListener('input', () => draw());
   function draw() {
-    const d = dash.data('target_open'); tb.replaceChildren(); sumEl.replaceChildren();
+    const d = dash.data('target_dealers'); tb.replaceChildren(); sumEl.replaceChildren(); cnt.textContent = '';
+    tfEl.querySelectorAll('[data-tf]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.tf === tf)));
     document.querySelectorAll('#target-table th').forEach((th) => th.setAttribute('aria-sort', th.dataset.k === sortK ? (asc ? 'ascending' : 'descending') : 'none'));
-    const res = dash.result && dash.result();
-    const tm = res && res.meta && res.meta.target;
-    const has = !!(tm && tm.has_target);
-    none.hidden = !res || has; wrapT.hidden = !has; q.hidden = !has;
-    if (d.status !== 'ok' || !has) return;
-    const b = brandNow(), s = q.value.trim().toLowerCase();
-    const k = tm.by_brand.find((r) => r.brand === b);
-    if (k) {
-      [[int(k.open_dealers) + ' dari ' + int(k.dealers), 'dealer bertarget belum ada billing'], ['Rp ' + rp(k.open_target), 'target di dealer tersebut'], [int(k.open_not_visited), 'di antaranya belum dikunjungi bulan ini']]
-        .forEach(([v, l], i) => { const x = document.createElement('div'); const vv = document.createElement('b'); vv.textContent = v; if (i === 2 && k.open_not_visited > 0) vv.className = 'bad'; x.append(vv, ' ' + l); sumEl.append(x); });
-    }
-    d.data.filter((r) => (b === 'All' || r.brand.split(', ').includes(b)) && (!window.ecFmt.smId() || r.sales_id === window.ecFmt.smId()) && (!s || (r.dealer + ' ' + r.salesman).toLowerCase().includes(s)))
-      .sort((a, c) => { const x = a[sortK], y = c[sortK]; const o = typeof x === 'string' ? String(x).localeCompare(String(y)) : x - y; return asc ? o : -o; })
-      .forEach((r) => {
-        const tr = document.createElement('tr'); tr.dataset.key = encodeURIComponent(r.sales_id) + ',' + encodeURIComponent(r.dealer_code);
-        [[r.salesman, 'l'], [r.brand, 'l'], [r.dealer, 'l'], [rp(r.target)], [int(r.planned_visits), r.planned_visits === 0 ? 'bad' : ''], [int(r.visit_call), r.visit_call === 0 ? 'bad' : ''], [fd(r.last_visit), 'l' + (r.last_visit ? '' : ' bad')]]
-          .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
-        tb.appendChild(tr);
-      });
+    const res = dash.result && dash.result(), tm = res && res.meta && res.meta.target, has = !!(tm && tm.has_target && d.status === 'ok' && d.data.length);
+    none.hidden = !res || has; wrapT.hidden = !has; q.hidden = !has; tfEl.hidden = !has;
+    if (!has) return;
+    const b = brandNow(), sid = window.ecFmt.smId(), s = q.value.trim().toLowerCase();
+    const base = d.data.filter((r) => (b === 'All' || r.brand.split(', ').includes(b)) && (!sid || r.sales_id === sid));
+    const T = base.reduce((t, r) => t + r.target, 0), A = base.reduce((t, r) => t + r.actual, 0);
+    const below = base.filter((r) => r.actual < r.target).length, nob = base.filter((r) => r.billed === 'No'), nov = nob.filter((r) => !r.visit_call).length;
+    [['Rp ' + rp(T), 'target'], ['Rp ' + rp(A), 'aktual'], [pct(A / (T || 1)), 'pencapaian', A < T ? 'bad' : 'good'], [int(below) + ' dari ' + int(base.length), 'dealer di bawah target'], [int(nob.length), 'belum belanja (' + int(nov) + ' belum dikunjungi)', nob.length ? 'bad' : '']]
+      .forEach(([v, l, c]) => { const x = document.createElement('div'); const vv = document.createElement('b'); vv.textContent = v; if (c) vv.className = c; x.append(vv, ' ' + l); sumEl.append(x); });
+    const rows = base.filter((r) => (tf === 'all' || (tf === 'below' && r.actual < r.target) || (tf === 'none' && r.billed === 'No') || (tf === 'met' && r.actual >= r.target)) && (!s || (r.dealer + ' ' + r.salesman).toLowerCase().includes(s)))
+      .sort((a, c) => { const x = a[sortK], y = c[sortK]; const o = typeof x === 'string' ? String(x).localeCompare(String(y)) : x - y; return asc ? o : -o; });
+    const frag = document.createDocumentFragment();
+    rows.forEach((r) => {
+      const tr = document.createElement('tr'); tr.dataset.key = encodeURIComponent(r.sales_id) + ',' + encodeURIComponent(r.dealer_code);
+      [[r.salesman, 'l'], [r.brand, 'l'], [r.dealer, 'l'], [rp(r.target)], [rp(r.actual), r.billed === 'No' ? 'bad' : ''], [pct(r.achievement), r.achievement >= 1 ? 'good' : r.billed === 'No' ? 'bad' : ''], [r.gap ? rp(r.gap) : '–'],
+        [int(r.planned_visits), r.planned_visits === 0 && r.actual < r.target ? 'bad' : ''], [int(r.visit_call), r.visit_call === 0 && r.actual < r.target ? 'bad' : ''], [fd(r.last_visit), 'l' + (r.last_visit ? '' : ' bad')]]
+        .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
+      frag.appendChild(tr);
+    });
+    tb.appendChild(frag);
+    cnt.textContent = int(rows.length) + ' dealer ditampilkan.';
   }
   dash.onData(draw);
 })();
