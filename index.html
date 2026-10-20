@@ -1209,20 +1209,20 @@ window.dash = (function () {
       if (d.status === 'error') { const f = document.createElement('div'); f.className = 'fail'; f.textContent = 'Gagal memuat'; box.append(f); return; }
       if (d.status !== 'ok') return;
       const rows = rowsOf(d.data, brandNow());
-      const W = box.clientWidth || 400, rowH = 34, m = { t: 4, r: 8, b: 4 };
+      // label on its own line above each bar, so long labels never collide with bars or values
+      const W = box.clientWidth || 400, rowH = 44, m = { t: 2, r: 8, b: 2 };
       const H = m.t + m.b + rows.length * rowH;
       const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
-      const lab = svg.append('g').selectAll('text').data(rows).join('text').text(label).attr('y', (r, i) => m.t + i * rowH + rowH / 2).attr('dy', '0.35em')
+      svg.append('g').selectAll('text').data(rows).join('text').text(label).attr('x', 0).attr('y', (r, i) => m.t + i * rowH + 13)
         .style('fill', 'var(--color-fg)').style('font-size', 'var(--cds-font-size-caption)');
-      let lw = 0; lab.each(function () { lw = Math.max(lw, this.getComputedTextLength()); });
-      lw = Math.min(lw + 10, W * 0.5);
-      const endLab = 200;
-      const xmax = d3.max(rows, val) || 1;
-      const x = d3.scaleLinear([0, xmax], [lw, Math.max(lw + 20, W - m.r - endLab)]);
-      svg.append('g').selectAll('rect').data(rows).join('rect').attr('x', lw).attr('y', (r, i) => m.t + i * rowH + 7).attr('height', rowH - 14).attr('rx', 4)
-        .attr('width', (r) => Math.max(1, x(val(r)) - lw)).style('fill', (r) => colorOf(r));
-      svg.append('g').selectAll('text').data(rows).join('text').attr('x', (r) => x(val(r)) + 6).attr('y', (r, i) => m.t + i * rowH + rowH / 2).attr('dy', '0.35em')
+      const ends = svg.append('g').selectAll('text').data(rows).join('text').attr('y', (r, i) => m.t + i * rowH + 29).attr('dy', '0.35em')
         .text((r) => fmtVal(r) + extra(r)).style('fill', 'var(--color-fg-muted)').style('font-size', 'var(--cds-font-size-caption)').style('font-variant-numeric', 'tabular-nums');
+      let ew = 0; ends.each(function () { ew = Math.max(ew, this.getComputedTextLength()); });
+      const xmax = d3.max(rows, val) || 1;
+      const x = d3.scaleLinear([0, xmax], [0, Math.max(40, W - m.r - ew - 10)]);
+      svg.insert('g', ':first-child').selectAll('rect').data(rows).join('rect').attr('x', 0).attr('y', (r, i) => m.t + i * rowH + 21).attr('height', 16).attr('rx', 3)
+        .attr('width', (r) => Math.max(1, x(val(r)))).style('fill', (r) => colorOf(r));
+      ends.attr('x', (r) => x(val(r)) + 6);
     });
   }
   hbars('unplanned-chart', 'unplanned', (rows, b) => window.ecFmt.pickRows(rows, b).sort((a, c) => a.order - c.order),
