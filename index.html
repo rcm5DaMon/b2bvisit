@@ -1081,10 +1081,13 @@ window.dash = (function () {
   // KPI tiles (markup built once, filled in onData)
   const TILES = [
     ['planned', 'Total plan', null, 'Kunjungan dealer di PJP'],
+    ['executed', 'Plan terlaksana', null, 'Plan yang ada Visit/Call di hari plan'],
     ['compliance', 'Kepatuhan plan', null, 'Plan terlaksana di hari plan'],
+    ['ec_same_day', 'Jumlah EC hari sama', null, 'Visit/Call dengan billing di hari yang sama'],
     ['ec_same_day_pct', 'EC hari sama', null, 'Visit/Call dengan billing di hari yang sama'],
     ['sales_same_day_ec', 'Sales dari EC hari sama', null, ''],
     ['pct_sales_same_day_ec', '% sales dari EC hari sama', null, 'Sales EC hari sama ÷ total sales'],
+    ['ec_same_week', 'Jumlah EC minggu sama', null, 'Visit/Call dengan billing di minggu yang sama'],
     ['ec_same_week_pct', 'EC minggu sama', null, 'Billing di minggu yang sama (Sen–Min)'],
     ['ec_forward_pct', 'EC setelah visit', null, 'Billing di hari kunjungan atau sesudahnya, minggu sama'],
     ['extra', 'Check-in tambahan', null, 'Check-in ke-2 dst. pada plan yang terlaksana'],
@@ -1131,8 +1134,10 @@ window.dash = (function () {
       el.dataset.where = 'brand=' + enc(b);
       el.classList.toggle('dash-skeleton', k.status === 'loading');
       if (!row) { el.textContent = '—'; return; }
-      const f = el.dataset.field, v = row[f];
-      el.textContent = ['visit_call', 'planned', 'extra'].includes(f) ? int(v) : f === 'sales_same_day_ec' ? 'Rp ' + rpM(v) : f === 'sales_total' ? rpM(v) : pct(v);
+      const f = el.dataset.field;
+      let v = row[f];
+      if (v === undefined && (f === 'ec_same_day' || f === 'ec_same_week')) v = Math.round(row[f + '_pct'] * row.visit_call);
+      el.textContent = ['visit_call', 'planned', 'extra', 'executed', 'ec_same_day', 'ec_same_week'].includes(f) ? int(v) : f === 'sales_same_day_ec' ? 'Rp ' + rpM(v) : f === 'sales_total' ? rpM(v) : pct(v);
     });
     const tg = ecTarget(row), tEl = document.getElementById('tgt-mtd'), vEl = document.querySelector('#tile-ec_same_day_pct .val');
     tEl.textContent = row ? tg.text : ''; tEl.className = 'tgt' + (tg.ok === true ? ' good' : tg.ok === false ? ' bad' : '');
@@ -1349,11 +1354,13 @@ window.dash = (function () {
   // tiles
   const TILES = [
     ['planned', 'Total plan', 'int', null],
+    ['executed', 'Plan terlaksana', 'int', null],
     ['compliance', 'Kepatuhan plan', 'pct', 'compliance'],
     ['missed', 'Plan terlewat', 'int', null],
     ['extra', 'Check-in tambahan', 'int', null],
     ['unplanned', 'Di luar plan', 'int', null],
     ['visit_call', 'Visit + Call', 'int', null],
+    ['ec_same_day', 'Jumlah EC hari sama', 'int', null],
     ['ec_same_day_pct', 'EC hari sama', 'pct', 'ec_same_day_pct'],
     ['sales_same_day_ec', 'Sales dari EC hari sama', 'rp', null],
     ['pct_sales_same_day_ec', '% sales dari EC hari sama', 'pct', 'pct_sales_same_day_ec']
@@ -1374,6 +1381,8 @@ window.dash = (function () {
       c.append('Bulan berjalan: ');
       const m = document.createElement('span'); m.className = 'kmark'; m.dataset.source = 'kpi'; m.dataset.field = cmp; m.textContent = '—'; c.append(m);
     } else if (f === 'planned') c.textContent = 'Kunjungan dealer di PJP hari itu';
+    else if (f === 'executed') c.textContent = 'Plan yang ada Visit/Call di hari itu';
+    else if (f === 'ec_same_day') c.textContent = 'Visit/Call dengan billing di hari itu';
     else if (f === 'missed') c.textContent = 'Dealer di plan yang tidak dikunjungi hari itu';
     else if (f === 'extra') c.textContent = 'Check-in ke-2 dst. pada plan yang terlaksana';
     else if (f === 'unplanned') c.textContent = 'Visit/Call yang tidak di-plan untuk hari itu';
