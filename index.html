@@ -55,6 +55,8 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
 .empty b{font-weight:600}
 .ec #brand-card,.ec #weekly-card{grid-column:1/-1}
 .ec #target-filter{margin-bottom:var(--cds-gap-sm)}
+.ec .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+#day-pick{font-size:var(--cds-font-size-body)}
 .ec .xgrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));align-items:start}
 .ec .xgrid > div{min-width:0}
 .ec .xsub{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);margin-bottom:var(--cds-gap-sm)}
@@ -133,12 +135,13 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
   </header>
   <div class="empty" id="empty" hidden><b>Belum ada data.</b> <span id="empty-text">Upload file Billing bulanan (.xlsx dengan sheet Plan Visit, Data Tracking Visit, Billing Sales B2B dan Target) lewat tombol di atas. File diproses di browser Anda dan tidak dikirim ke mana pun.</span></div>
   <div id="main" class="page">
-  <div class="tabs" role="tablist" aria-label="Tampilan"><button class="tab" role="tab" data-tab="daily" id="daily-tab">Hari terakhir</button><button class="tab" role="tab" data-tab="mtd" id="mtd-tab">Bulan berjalan</button></div>
+  <div class="tabs" role="tablist" aria-label="Tampilan"><button class="tab" role="tab" data-tab="daily" id="daily-tab">Harian</button><button class="tab" role="tab" data-tab="mtd" id="mtd-tab">Bulan berjalan</button></div>
   <div class="filters" id="brand-filter" role="group" aria-label="Brand"><span>Brand</span></div>
   <div class="filters" id="sm-filter-row"><label for="sm-filter"><span>Salesman</span></label><select id="sm-filter" class="smsel" data-source="salesmen"><option value="">Semua salesman</option></select></div>
   <section id="daily" class="page">
     <div class="dayctl">
-      <h2 class="ph">Hari billing terakhir · <span class="dlabel">—</span></h2>
+      <h2 class="ph"><span class="dlabel">—</span></h2>
+      <label for="day-pick" class="sr">Pilih hari</label><select id="day-pick" class="smsel" aria-label="Pilih hari"></select><span id="day-status" class="xsub"></span>
       <button class="chip" type="button" id="sm-clear" hidden></button>
     </div>
     <p class="take" id="day-take">
@@ -1427,7 +1430,7 @@ window.dash = (function () {
     const b = brandNow(), d = dash.data('daily_brand'), k = dash.data('kpi');
     const day = dayNow(), sm = smNow();
     document.querySelectorAll('#daily .dlabel').forEach((x) => { x.textContent = day ? fmtDay(day) : '—'; });
-    document.querySelectorAll('#daily .smname').forEach((x) => { x.textContent = sm ? ' · ' + sm.split('|')[1] : ''; });
+    document.querySelectorAll('#daily .smname').forEach((x) => { x.textContent = ''; });
     smClear.hidden = !sm; smClear.textContent = sm ? sm.split('|')[1] + ' ×' : '';
 
     const sid = window.ecFmt.smId(), dsm = dash.data('daily_salesman'), sAll = dash.data('salesmen');
@@ -1533,6 +1536,53 @@ window.dash = (function () {
 </script>
 
 <script>
+// Daily figures for any one day, rebuilt from the row detail (same rules as the latest-day figures).
+(function (root) {
+  const BRANDS = ['Xiaomi', 'Samsung', 'Tecno', 'Apple'];
+  const sum = (a, f) => a.reduce((t, x) => t + f(x), 0);
+  const ratio = (a, b) => (b ? a / b : 0);
+  const serial = (iso) => Math.round(Date.parse(iso + 'T00:00:00Z') / 864e5) + 25569;
+  const hhmm = (t) => { const m = Math.floor(Math.round((t - Math.floor(t)) * 86400) / 60); return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+
+  function daily(detail, dayIso, salesmen) {
+    const d = serial(dayIso);
+    const V = detail.visits.filter((v) => v.plan !== 'N/A' && v.d === d).sort((a, b) => a.t - b.t);
+    const P = detail.plans.filter((p) => p.d === d);
+    const S = detail.bills.filter((b) => b.type === 'ZF2' && b.d === d);
+    const nm = new Map((salesmen || []).map((s) => [s.sales_id, s.salesman]));
+    const sub = (arr, f, br) => (br === 'All' ? arr : arr.filter((x) => f(x) === br));
+    const daily_brand = ['All', ...BRANDS].map((br) => {
+      const v = sub(V, (x) => x.brand, br), p = sub(P, (x) => x.brand, br), s = sub(S, (x) => x.sbrand, br);
+      const ex = p.filter((x) => x.exec === 'Yes').length, st = sum(s, (x) => x.net), sd = sum(s.filter((x) => x.q), (x) => x.net);
+      return { date: dayIso, brand: br, planned: p.length, executed: ex, missed: p.length - ex, compliance: ratio(ex, p.length), extra: sum(v, (x) => x.extra), visit_call: v.length,
+        unplanned: v.filter((x) => x.plan === 'Unplanned').length, ec_same_day: sum(v, (x) => x.ecd), ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length),
+        sales_total: st, sales_same_day_ec: sd, pct_sales_same_day_ec: ratio(sd, st) };
+    });
+    const daily_salesman = [...new Set([...V.map((v) => v.sid), ...P.map((p) => p.sid)])].sort().map((sid) => {
+      const v = V.filter((x) => x.sid === sid), p = P.filter((x) => x.sid === sid), s = S.filter((x) => x.sid === sid);
+      const ex = p.filter((x) => x.exec === 'Yes').length, st = sum(s, (x) => x.net), sd = sum(s.filter((x) => x.q), (x) => x.net);
+      return { date: dayIso, sales_id: sid, salesman: sid === '(no ID)' ? '(no Sales ID)' : nm.get(sid) || (p[0] && p[0].name) || (v[0] && v[0].name) || sid,
+        brand: p.length ? p[0].brand : (v[0] ? v[0].brand : ''), planned: p.length, executed: ex, missed: p.length - ex, compliance: ratio(ex, p.length), extra: sum(v, (x) => x.extra),
+        visit_call: v.length, unplanned: v.filter((x) => x.plan === 'Unplanned').length, ec_same_day: sum(v, (x) => x.ecd), ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length),
+        sales_same_day_ec: sd, sales_total: st, pct_sales_same_day_ec: ratio(sd, st) };
+    });
+    const daily_visits = V.map((v, k) => ({
+      visit_id: 'V' + String(k + 1).padStart(4, '0'), date: dayIso, time: hhmm(v.t), sales_id: v.sid, salesman: v.name, brand: v.brand, dealer_code: v.dealer, dealer: v.dname,
+      activity: v.act, plan_status: v.plan === 'Planned' ? (v.extra ? 'Extra check-in' : 'Planned') : (v.msub || v.utype), hasil_visit: v.hasil, same_day_sales: v.sd,
+      effective_same_day: v.ecd ? 'Yes' : 'No' }));
+    const seen = new Map();
+    const daily_missed = P.filter((p) => p.exec !== 'Yes').map((p) => {
+      const n = (seen.get(p.key) || 0) + 1; seen.set(p.key, n);
+      return { plan_key: n > 1 ? p.key + '#' + n : p.key, date: dayIso, sales_id: p.sid, salesman: p.name || nm.get(p.sid) || p.sid, brand: p.brand, dealer_code: p.dealer, dealer: p.dname, visited_same_week: p.sameWeek };
+    });
+    return { daily_brand, daily_salesman, daily_visits, daily_missed };
+  }
+  root.ecDaily = daily;
+  if (typeof module !== 'undefined') module.exports = { daily };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
 // GitHub Pages version: data comes from an uploaded Billing file (kept in this browser) or from data.json next to this page.
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -1561,9 +1611,27 @@ window.dash = (function () {
     $('dl-btn').hidden = false; $('clear-btn').hidden = source !== 'local'; $('xl-row').hidden = !(current && current.detail);
   }
   function setEmpty(on) { empty.hidden = !on; main.hidden = on; }
+  // ---- day picker: latest day comes with the data; other days are rebuilt from the row detail
+  const dayPick = $('day-pick'), daySt = $('day-status');
+  function fillDays(result) {
+    const m = result.meta, out = [];
+    for (let t = Date.parse(m.latest_billing_date + 'T00:00:00Z'); t >= Date.parse(m.period_start + 'T00:00:00Z'); t -= 864e5) {
+      const d = new Date(t); if (d.getUTCDay() === 0) continue; // Mon–Sat working days
+      const iso = d.toISOString().slice(0, 10);
+      out.push(new Option(d3.utcFormat('%a %-d %b')(d) + (iso === m.latest_billing_date ? ' (terakhir)' : ''), iso));
+    }
+    dayPick.replaceChildren(...out); dayPick.value = m.latest_billing_date; daySt.textContent = '';
+  }
+  dayPick.addEventListener('change', () => {
+    if (!current) return;
+    const day = dayPick.value, res = current.result;
+    if (day === res.meta.latest_billing_date) { daySt.textContent = ''; dash._set({ status: 'ok', result: res }); return; }
+    if (!current.detail) { daySt.textContent = 'Data per hari belum tersedia. Upload ulang file billing.'; daySt.className = 'xsub bad'; dayPick.value = res.meta.latest_billing_date; return; }
+    dash._set({ status: 'ok', result: { ...res, ...window.ecDaily(current.detail, day, res.salesmen) } }); daySt.textContent = '';
+  });
   function use(doc, result, source, detail) {
     current = { doc, result, source, detail: detail || null };
-    setEmpty(false); dash._set({ status: 'ok', result }); showSource(doc, result, source);
+    setEmpty(false); dash._set({ status: 'ok', result }); showSource(doc, result, source); fillDays(result);
   }
 
   const WANT = { plan: /^plan visit/i, track: /^data tracking visit/i, bill: /^billing/i, target: /^target/i };
