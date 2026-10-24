@@ -135,13 +135,13 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
   </header>
   <div class="empty" id="empty" hidden><b>Belum ada data.</b> <span id="empty-text">Upload file Billing bulanan (.xlsx dengan sheet Plan Visit, Data Tracking Visit, Billing Sales B2B dan Target) lewat tombol di atas. File diproses di browser Anda dan tidak dikirim ke mana pun.</span></div>
   <div id="main" class="page">
-  <div class="tabs" role="tablist" aria-label="Tampilan"><button class="tab" role="tab" data-tab="daily" id="daily-tab">Harian</button><button class="tab" role="tab" data-tab="mtd" id="mtd-tab">Bulan berjalan</button></div>
+  <div class="tabs" role="tablist" aria-label="Tampilan"><button class="tab" role="tab" data-tab="daily" id="daily-tab">Harian</button><button class="tab" role="tab" data-tab="weekly" id="weekly-tab">Mingguan</button><button class="tab" role="tab" data-tab="mtd" id="mtd-tab">Bulan berjalan</button></div>
   <div class="filters" id="brand-filter" role="group" aria-label="Brand"><span>Brand</span></div>
   <div class="filters" id="sm-filter-row"><label for="sm-filter"><span>Salesman</span></label><select id="sm-filter" class="smsel" data-source="salesmen"><option value="">Semua salesman</option></select></div>
   <section id="daily" class="page">
     <div class="dayctl">
       <h2 class="ph"><span class="dlabel">—</span></h2>
-      <label for="day-pick" class="sr">Pilih hari</label><select id="day-pick" class="smsel" aria-label="Pilih hari"></select><span id="day-status" class="xsub"></span>
+      <label for="day-pick" class="sr">Pilih hari</label><select id="day-pick" class="smsel" aria-label="Pilih hari atau minggu"></select><span id="day-status" class="xsub"></span>
       <button class="chip" type="button" id="sm-clear" hidden></button>
     </div>
     <p class="take" id="day-take">
@@ -1031,7 +1031,7 @@ window.dash = (function () {
   let params = { brand: 'All', tab: 'daily', salesman: null };
   const fns = [];
   // show the chosen tab first, so its charts are visible (and get a width) when they draw
-  const showTab = () => { const t = params.tab || 'daily', d = document.getElementById('daily'), m = document.getElementById('mtd'); if (d) d.hidden = t !== 'daily'; if (m) m.hidden = t !== 'mtd'; };
+  const showTab = () => { const t = params.tab || 'daily', d = document.getElementById('daily'), m = document.getElementById('mtd'); if (d) d.hidden = t !== 'daily' && t !== 'weekly'; if (m) m.hidden = t !== 'mtd'; };
   const run = () => { showTab(); fns.forEach((f) => { try { f(); } catch (e) { console.error(e); } }); };
   let t = null, lastW = 0;
   new ResizeObserver((es) => { const w = Math.round(es[0].contentRect.width); if (w === lastW) return; lastW = w; clearTimeout(t); t = setTimeout(run, 120); }).observe(document.documentElement);
@@ -1372,7 +1372,7 @@ window.dash = (function () {
   const tabs = document.querySelectorAll('.ec .tab');
   tabs.forEach((t) => t.addEventListener('click', () => { dash.setParams({ tab: t.dataset.tab }); }));
   const want = location.hash.slice(1);
-  if (want === 'mtd' || want === 'daily') dash.setParams({ tab: want });
+  if (want === 'mtd' || want === 'daily' || want === 'weekly') dash.setParams({ tab: want });
 
   // salesman filter
   const smClear = document.getElementById('sm-clear');
@@ -1407,12 +1407,12 @@ window.dash = (function () {
     } else if (cmp) {
       c.append('Bulan berjalan: ');
       const m = document.createElement('span'); m.className = 'kmark'; m.dataset.source = 'kpi'; m.dataset.field = cmp; m.textContent = '—'; c.append(m);
-    } else if (f === 'planned') c.textContent = 'Kunjungan dealer di PJP hari itu';
-    else if (f === 'executed') c.textContent = 'Plan yang ada Visit/Call di hari itu';
-    else if (f === 'ec_same_day') c.textContent = 'Visit/Call dengan billing di hari itu';
-    else if (f === 'missed') c.textContent = 'Dealer di plan yang tidak dikunjungi hari itu';
+    } else if (f === 'planned') c.textContent = 'Kunjungan dealer di PJP';
+    else if (f === 'executed') c.textContent = 'Plan yang ada Visit/Call di hari plan';
+    else if (f === 'ec_same_day') c.textContent = 'Visit/Call dengan billing di hari kunjungan';
+    else if (f === 'missed') c.textContent = 'Dealer di plan yang tidak dikunjungi di hari plan';
     else if (f === 'extra') c.textContent = 'Check-in ke-2 dst. pada plan yang terlaksana';
-    else if (f === 'unplanned') c.textContent = 'Visit/Call yang tidak di-plan untuk hari itu';
+    else if (f === 'unplanned') c.textContent = 'Visit/Call yang tidak di-plan untuk hari kunjungan';
     else c.textContent = 'Terlaksana + Tambahan + Di luar plan';
     d.append(l, v, c);
     if (f === 'ec_same_day_pct') { const t = document.createElement('div'); t.className = 'tgt'; t.id = 'tgt-day'; d.append(t); }
@@ -1424,12 +1424,12 @@ window.dash = (function () {
   dash.onData(() => {
     const tab = dash.params().tab || 'daily';
     tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === tab)));
-    document.getElementById('daily').hidden = tab !== 'daily';
+    document.getElementById('daily').hidden = tab !== 'daily' && tab !== 'weekly';
     document.getElementById('mtd').hidden = tab !== 'mtd';
 
     const b = brandNow(), d = dash.data('daily_brand'), k = dash.data('kpi');
     const day = dayNow(), sm = smNow();
-    document.querySelectorAll('#daily .dlabel').forEach((x) => { x.textContent = day ? fmtDay(day) : '—'; });
+    document.querySelectorAll('#daily .dlabel').forEach((x) => { x.textContent = window.ecDayLabel || (day ? fmtDay(day) : '—'); });
     document.querySelectorAll('#daily .smname').forEach((x) => { x.textContent = ''; });
     smClear.hidden = !sm; smClear.textContent = sm ? sm.split('|')[1] + ' ×' : '';
 
@@ -1544,11 +1544,14 @@ window.dash = (function () {
   const serial = (iso) => Math.round(Date.parse(iso + 'T00:00:00Z') / 864e5) + 25569;
   const hhmm = (t) => { const m = Math.floor(Math.round((t - Math.floor(t)) * 86400) / 60); return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
 
-  function daily(detail, dayIso, salesmen) {
-    const d = serial(dayIso);
-    const V = detail.visits.filter((v) => v.plan !== 'N/A' && v.d === d).sort((a, b) => a.t - b.t);
-    const P = detail.plans.filter((p) => p.d === d);
-    const S = detail.bills.filter((b) => b.type === 'ZF2' && b.d === d);
+  const DAYS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  const dlab = (s) => { const x = new Date(Math.round((s - 25569) * 864e5)); return DAYS[x.getUTCDay()] + ' ' + x.getUTCDate(); };
+  // one day (fromIso === toIso) or a range of days, e.g. a week; dayIso is the key written into every row
+  function range(detail, fromIso, toIso, salesmen, dayIso) {
+    const a = serial(fromIso), z = serial(toIso), multi = a !== z, inR = (d) => d >= a && d <= z;
+    const V = detail.visits.filter((v) => v.plan !== 'N/A' && inR(v.d)).sort((x, y) => x.t - y.t);
+    const P = detail.plans.filter((p) => inR(p.d)).sort((x, y) => x.d - y.d);
+    const S = detail.bills.filter((b) => b.type === 'ZF2' && inR(b.d));
     const nm = new Map((salesmen || []).map((s) => [s.sales_id, s.salesman]));
     const sub = (arr, f, br) => (br === 'All' ? arr : arr.filter((x) => f(x) === br));
     const daily_brand = ['All', ...BRANDS].map((br) => {
@@ -1567,18 +1570,19 @@ window.dash = (function () {
         sales_same_day_ec: sd, sales_total: st, pct_sales_same_day_ec: ratio(sd, st) };
     });
     const daily_visits = V.map((v, k) => ({
-      visit_id: 'V' + String(k + 1).padStart(4, '0'), date: dayIso, time: hhmm(v.t), sales_id: v.sid, salesman: v.name, brand: v.brand, dealer_code: v.dealer, dealer: v.dname,
+      visit_id: 'V' + String(k + 1).padStart(4, '0'), date: dayIso, time: multi ? dlab(v.d) + ' · ' + hhmm(v.t) : hhmm(v.t), sales_id: v.sid, salesman: v.name, brand: v.brand, dealer_code: v.dealer, dealer: v.dname,
       activity: v.act, plan_status: v.plan === 'Planned' ? (v.extra ? 'Extra check-in' : 'Planned') : (v.msub || v.utype), hasil_visit: v.hasil, same_day_sales: v.sd,
       effective_same_day: v.ecd ? 'Yes' : 'No' }));
     const seen = new Map();
     const daily_missed = P.filter((p) => p.exec !== 'Yes').map((p) => {
       const n = (seen.get(p.key) || 0) + 1; seen.set(p.key, n);
-      return { plan_key: n > 1 ? p.key + '#' + n : p.key, date: dayIso, sales_id: p.sid, salesman: p.name || nm.get(p.sid) || p.sid, brand: p.brand, dealer_code: p.dealer, dealer: p.dname, visited_same_week: p.sameWeek };
+      return { plan_key: n > 1 ? p.key + '#' + n : p.key, date: dayIso, sales_id: p.sid, salesman: p.name || nm.get(p.sid) || p.sid, brand: p.brand, dealer_code: p.dealer, dealer: multi ? p.dname + ' (' + dlab(p.d) + ')' : p.dname, visited_same_week: p.sameWeek };
     });
     return { daily_brand, daily_salesman, daily_visits, daily_missed };
   }
-  root.ecDaily = daily;
-  if (typeof module !== 'undefined') module.exports = { daily };
+  const daily = (detail, dayIso, salesmen) => range(detail, dayIso, dayIso, salesmen, dayIso);
+  root.ecDaily = daily; root.ecRange = range;
+  if (typeof module !== 'undefined') module.exports = { daily, range };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
@@ -1613,25 +1617,44 @@ window.dash = (function () {
   function setEmpty(on) { empty.hidden = !on; main.hidden = on; }
   // ---- day picker: latest day comes with the data; other days are rebuilt from the row detail
   const dayPick = $('day-pick'), daySt = $('day-status');
+  let pickMode = 'daily';
   function fillDays(result) {
-    const m = result.meta, out = [];
-    for (let t = Date.parse(m.latest_billing_date + 'T00:00:00Z'); t >= Date.parse(m.period_start + 'T00:00:00Z'); t -= 864e5) {
-      const d = new Date(t); if (d.getUTCDay() === 0) continue; // Mon–Sat working days
-      const iso = d.toISOString().slice(0, 10);
-      out.push(new Option(d3.utcFormat('%a %-d %b')(d) + (iso === m.latest_billing_date ? ' (terakhir)' : ''), iso));
+    const m = result.meta, fmt = d3.utcFormat('%-d %b'), dt = (x) => new Date(x + 'T00:00:00Z');
+    if (pickMode === 'weekly') {
+      dayPick.replaceChildren(...m.weeks.slice().reverse().map((w) => new Option('Minggu ' + w.week.slice(1) + ' · ' + fmt(dt(w.from)) + '–' + fmt(dt(w.to)) + (w.to === m.latest_billing_date ? ' (berjalan)' : ''), 'W:' + w.week)));
+    } else {
+      const out = [];
+      for (let t = Date.parse(m.latest_billing_date + 'T00:00:00Z'); t >= Date.parse(m.period_start + 'T00:00:00Z'); t -= 864e5) {
+        const d = new Date(t); if (d.getUTCDay() === 0) continue; // Mon–Sat working days
+        const iso = d.toISOString().slice(0, 10);
+        out.push(new Option(d3.utcFormat('%a %-d %b')(d) + (iso === m.latest_billing_date ? ' (terakhir)' : ''), 'D:' + iso));
+      }
+      dayPick.replaceChildren(...out);
     }
-    dayPick.replaceChildren(...out); dayPick.value = m.latest_billing_date; daySt.textContent = '';
+    dayPick.selectedIndex = 0; daySt.textContent = ''; window.ecDayLabel = null;
   }
+  document.querySelectorAll('.ec .tab').forEach((t) => t.addEventListener('click', () => {
+    const mode = t.dataset.tab === 'weekly' ? 'weekly' : t.dataset.tab === 'daily' ? 'daily' : null;
+    if (!mode || mode === pickMode) return;
+    pickMode = mode; if (!current) return;
+    fillDays(current.result); dayPick.dispatchEvent(new Event('change'));
+  }));
   dayPick.addEventListener('change', () => {
     if (!current) return;
-    const day = dayPick.value, res = current.result;
-    if (day === res.meta.latest_billing_date) { daySt.textContent = ''; dash._set({ status: 'ok', result: res }); return; }
-    if (!current.detail) { daySt.textContent = 'Data per hari belum tersedia. Upload ulang file billing.'; daySt.className = 'xsub bad'; dayPick.value = res.meta.latest_billing_date; return; }
-    dash._set({ status: 'ok', result: { ...res, ...window.ecDaily(current.detail, day, res.salesmen) } }); daySt.textContent = '';
+    const [kind, val] = dayPick.value.split(':'), res = current.result, m = res.meta;
+    if (kind === 'D' && val === m.latest_billing_date) { daySt.textContent = ''; window.ecDayLabel = null; dash._set({ status: 'ok', result: res }); return; }
+    if (!current.detail) { daySt.textContent = 'Data per hari belum tersedia. Upload ulang file billing.'; daySt.className = 'xsub bad'; return; }
+    let dd;
+    if (kind === 'W') {
+      const w = m.weeks.find((x) => x.week === val), dt = (x) => new Date(x + 'T00:00:00Z');
+      dd = window.ecRange(current.detail, w.from, w.to, res.salesmen, w.to);
+      window.ecDayLabel = 'Minggu ' + val.slice(1) + ' · ' + d3.utcFormat('%-d')(dt(w.from)) + '–' + d3.utcFormat('%-d %b %Y')(dt(w.to));
+    } else { dd = window.ecDaily(current.detail, val, res.salesmen); window.ecDayLabel = null; }
+    dash._set({ status: 'ok', result: { ...res, ...dd } }); daySt.textContent = '';
   });
   function use(doc, result, source, detail) {
     current = { doc, result, source, detail: detail || null };
-    setEmpty(false); dash._set({ status: 'ok', result }); showSource(doc, result, source); fillDays(result);
+    setEmpty(false); dash._set({ status: 'ok', result }); showSource(doc, result, source); fillDays(result); if (pickMode === 'weekly') dayPick.dispatchEvent(new Event('change'));
   }
 
   const WANT = { plan: /^plan visit/i, track: /^data tracking visit/i, bill: /^billing/i, target: /^target/i };
