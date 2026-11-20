@@ -54,7 +54,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
 .empty{background:var(--color-panel);border:1px dashed var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-lg);font-size:var(--cds-font-size-body);line-height:1.5;max-width:46rem}
 .empty b{font-weight:600}
 .ec #brand-card,.ec #weekly-card{grid-column:1/-1}
-.ec #target-filter{margin-bottom:var(--cds-gap-sm)}
+.ec #target-filter,.ec #pw-filter{margin-bottom:var(--cds-gap-sm)}
 .ec .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 #day-pick{font-size:var(--cds-font-size-body)}
 .ec .xgrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));align-items:start}
@@ -116,6 +116,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
 .ec .dayctl select{font:inherit;font-size:var(--cds-font-size-body);padding:var(--cds-pad-xs) var(--cds-pad-sm);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg)}
 .ec .chip:disabled{opacity:.4;cursor:default}
 .ec .good{color:var(--color-ok)}
+.ec .warn{color:var(--color-warn)}
 [data-dash-source-state=empty]{color:transparent}
 [data-dash-source-state=refreshing]{opacity:.5;transition:opacity var(--cds-dur-slow)}
 </style>
@@ -129,14 +130,15 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       <button class="btn ghost" type="button" id="dl-btn" hidden>Download data.json</button>
       <button class="btn ghost" type="button" id="clear-btn" hidden>Hapus data di browser ini</button>
       <input type="file" id="file-in" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-      <span id="upd-status" role="status">Gunakan file Billing bulanan dengan sheet Plan Visit, Data Tracking Visit, Billing Sales B2B dan Target.</span>
+      <span id="upd-status" role="status">Gunakan file Billing bulanan dengan sheet Plan Visit, Data Tracking Visit, Billing Sales B2B, Target dan Adjustment Data Sales.</span>
     </div>
     <div class="upd" id="xl-row" hidden><button class="btn ghost" type="button" id="xl-btn">Download Excel</button><span id="xl-status" role="status"></span></div>
   </header>
-  <div class="empty" id="empty" hidden><b>Belum ada data.</b> <span id="empty-text">Upload file Billing bulanan (.xlsx dengan sheet Plan Visit, Data Tracking Visit, Billing Sales B2B dan Target) lewat tombol di atas. File diproses di browser Anda dan tidak dikirim ke mana pun.</span></div>
+  <div class="empty" id="empty" hidden><b>Belum ada data.</b> <span id="empty-text">Upload file Billing bulanan (.xlsx dengan sheet Plan Visit, Data Tracking Visit, Billing Sales B2B, Target dan Adjustment Data Sales) lewat tombol di atas. File diproses di browser Anda dan tidak dikirim ke mana pun.</span></div>
   <div id="main" class="page">
-  <div class="tabs" role="tablist" aria-label="Tampilan"><button class="tab" role="tab" data-tab="daily" id="daily-tab">Harian</button><button class="tab" role="tab" data-tab="weekly" id="weekly-tab">Mingguan</button><button class="tab" role="tab" data-tab="mtd" id="mtd-tab">Bulan berjalan</button></div>
+  <div class="tabs" role="tablist" aria-label="Tampilan"><button class="tab" role="tab" data-tab="daily" id="daily-tab">Harian</button><button class="tab" role="tab" data-tab="weekly" id="weekly-tab">Mingguan</button><button class="tab" role="tab" data-tab="mtd" id="mtd-tab">Bulan berjalan</button><button class="tab" role="tab" data-tab="plan" id="plan-tab">Monitoring plan</button></div>
   <div class="filters" id="brand-filter" role="group" aria-label="Brand"><span>Brand</span></div>
+  <div class="filters" id="depo-filter-row"><label for="depo-filter"><span>Depo</span></label><select id="depo-filter" class="smsel"><option value="">Semua depo</option></select></div>
   <div class="filters" id="sm-filter-row"><label for="sm-filter"><span>Salesman</span></label><select id="sm-filter" class="smsel" data-source="salesmen"><option value="">Semua salesman</option></select></div>
   <section id="daily" class="page">
     <div class="dayctl">
@@ -152,9 +154,9 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     <div class="tiles" id="day-tiles"></div>
     <div class="card" id="day-sales-card">
       <h2>Salesman pada <span class="dlabel">—</span></h2>
-      <p class="note">Terlaksana + Check-in tambahan + Di luar plan = Visit+Call. Check-in tambahan = check-in ke-2 dst. pada plan yang sudah terlaksana. Klik salesman untuk melihat hanya kunjungan dan plan terlewat miliknya di bawah. Merah = kepatuhan di bawah 50% atau 0 effective call. % EC hari sama hijau jika mencapai target 50%, merah jika di bawah. <span class="bname">Semua brand</span>.</p>
+      <p class="note">Terlaksana + Check-in tambahan + Di luar plan = Visit+Call. Check-in tambahan = check-in ke-2 dst. pada plan yang sudah terlaksana. Cuti/sakit dari sheet Adjustment Data Sales. Klik salesman untuk melihat hanya kunjungan dan plan terlewat miliknya di bawah. Merah = kepatuhan di bawah 50% atau 0 effective call. % EC hari sama hijau jika mencapai target 50%, merah jika di bawah. <span class="bname">Semua brand</span>.</p>
       <div class="scroll"><table id="day-sales" data-source="daily_salesman" data-row-key="date,sales_id">
-        <thead><tr><th data-field="salesman" class="l" data-k="salesman">Salesman</th><th data-field="brand" class="l" data-k="brand">Brand</th><th data-field="planned" data-k="planned">Plan</th><th data-field="missed" data-k="missed">Terlewat</th><th data-field="compliance" data-k="compliance">Kepatuhan</th><th data-field="executed" data-k="executed">Terlaksana</th><th data-field="extra" data-k="extra">Check-in tambahan</th><th data-field="unplanned" data-k="unplanned">Di luar plan</th><th data-field="visit_call" data-k="visit_call">Visit+Call</th><th data-field="ec_same_day" data-k="ec_same_day">EC hari sama</th><th data-field="ec_same_day_pct" data-k="ec_same_day_pct">% EC hari sama</th><th data-field="sales_same_day_ec" data-k="sales_same_day_ec">Sales EC hari sama (Rp)</th></tr></thead>
+        <thead><tr><th data-field="salesman" class="l" data-k="salesman">Salesman</th><th data-field="brand" class="l" data-k="brand">Brand</th><th data-field="depo" class="l" data-k="depo">Depo</th><th data-field="planned" data-k="planned">Plan</th><th data-field="missed" data-k="missed">Terlewat</th><th data-field="compliance" data-k="compliance">Kepatuhan</th><th data-field="executed" data-k="executed">Terlaksana</th><th data-field="extra" data-k="extra">Check-in tambahan</th><th data-field="unplanned" data-k="unplanned">Di luar plan</th><th data-field="visit_call" data-k="visit_call">Visit+Call</th><th data-field="off_days" data-k="off_days">Cuti/sakit (hari)</th><th data-field="ec_same_day" data-k="ec_same_day">EC hari sama</th><th data-field="ec_same_day_pct" data-k="ec_same_day_pct">% EC hari sama</th><th data-field="sales_same_day_ec" data-k="sales_same_day_ec">Sales EC hari sama (Rp)</th></tr></thead>
         <tbody></tbody></table></div>
     </div>
     <div class="grid">
@@ -163,14 +165,14 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
         <p class="note"><span class="dlabel">—</span> · <span class="bname">Semua brand</span><span class="smname"></span>. Billing hari sama = salesman tersebut ada billing ke dealer itu di hari yang sama.</p>
         <input class="search" id="visit-search" type="search" placeholder="Cari dealer atau salesman" aria-label="Cari kunjungan">
         <div class="scroll"><table id="day-visits" data-source="daily_visits" data-row-key="visit_id">
-          <thead><tr><th data-field="time" class="l">Jam</th><th data-field="salesman" class="l">Salesman</th><th data-field="dealer" class="l">Dealer</th><th data-field="activity" class="l">Jenis</th><th data-field="plan_status" class="l">Status plan</th><th data-field="hasil_visit" class="l">Hasil visit</th><th data-field="effective_same_day" class="l">Billing hari sama</th><th data-field="same_day_sales">Sales (Rp)</th></tr></thead>
+          <thead><tr><th data-field="time" class="l">Jam</th><th data-field="salesman" class="l">Salesman</th><th data-field="depo" class="l">Depo</th><th data-field="dealer" class="l">Dealer</th><th data-field="activity" class="l">Jenis</th><th data-field="plan_status" class="l">Status plan</th><th data-field="hasil_visit" class="l">Hasil visit</th><th data-field="effective_same_day" class="l">Billing hari sama</th><th data-field="same_day_sales">Sales (Rp)</th></tr></thead>
           <tbody></tbody></table></div>
       </div>
       <div class="card" id="day-missed-card">
         <h2>Plan terlewat</h2>
         <p class="note">Dealer yang di-plan tapi tidak ada Visit/Call di hari itu. “Dikunjungi minggu sama” = dikunjungi di hari lain pada minggu yang sama. <span class="bname">Semua brand</span><span class="smname"></span>.</p>
         <div class="scroll"><table id="day-missed" data-source="daily_missed" data-row-key="plan_key">
-          <thead><tr><th data-field="salesman" class="l">Salesman</th><th data-field="dealer" class="l">Dealer</th><th data-field="visited_same_week" class="l">Dikunjungi minggu sama</th></tr></thead>
+          <thead><tr><th data-field="salesman" class="l">Salesman</th><th data-field="depo" class="l">Depo</th><th data-field="dealer" class="l">Dealer</th><th data-field="visited_same_week" class="l">Dikunjungi minggu sama</th></tr></thead>
           <tbody></tbody></table></div>
       </div>
     </div>
@@ -196,7 +198,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       <h2>Per brand</h2>
       <p class="note"><span class="period">—</span>. Terlaksana + Check-in tambahan + Di luar plan = Visit+Call. Klik baris untuk memfilter halaman. EC = Visit/Call yang diikuti billing dari salesman tersebut ke dealer itu.</p>
       <div class="scroll"><table id="brand-table" data-source="kpi" data-row-key="brand">
-        <thead><tr><th data-field="brand">Brand</th><th data-field="planned">Plan</th><th data-field="compliance">Kepatuhan plan</th><th data-field="executed">Terlaksana</th><th data-field="extra">Check-in tambahan</th><th data-field="unplanned">Di luar plan</th><th data-field="visit_call">Visit+Call</th><th data-field="ec_same_day_pct">EC hari sama</th><th data-field="ec_same_week_pct">EC minggu sama</th><th data-field="ec_forward_pct">EC setelah visit</th><th data-field="pct_sales_same_day_ec">% sales EC hari sama</th><th data-field="sales_total">Sales (Rp)</th></tr></thead>
+        <thead><tr><th data-field="brand">Brand</th><th data-field="planned">Plan</th><th data-field="compliance">Kepatuhan plan</th><th data-field="executed">Terlaksana</th><th data-field="extra">Check-in tambahan</th><th data-field="unplanned">Di luar plan</th><th data-field="visit_call">Visit+Call</th><th data-field="off_days">Cuti/sakit (hari)</th><th data-field="ec_same_day_pct">EC hari sama</th><th data-field="ec_same_week_pct">EC minggu sama</th><th data-field="ec_forward_pct">EC setelah visit</th><th data-field="pct_sales_same_day_ec">% sales EC hari sama</th><th data-field="sales_total">Sales (Rp)</th></tr></thead>
         <tbody></tbody></table></div>
     </div>
     <div class="card" id="weekly-card">
@@ -228,7 +230,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       <div style="min-width:0">
         <input class="search" id="extra-search" type="search" placeholder="Cari dealer atau salesman" aria-label="Cari check-in tambahan">
         <div class="scroll"><table id="extra-table" data-source="extra_checkins" data-row-key="id">
-          <thead><tr><th data-field="date" class="l">Tanggal</th><th data-field="salesman" class="l">Salesman</th><th data-field="dealer" class="l">Dealer</th><th data-field="nth">Ke-</th><th data-field="first_time" class="l">Check-in pertama</th><th data-field="time" class="l">Check-in ini</th><th data-field="gap_min">Selisih (menit)</th><th data-field="activity" class="l">Jenis</th><th data-field="hasil_visit" class="l">Hasil visit</th><th data-field="effective_same_day" class="l">Billing hari sama</th></tr></thead>
+          <thead><tr><th data-field="date" class="l">Tanggal</th><th data-field="salesman" class="l">Salesman</th><th data-field="depo" class="l">Depo</th><th data-field="dealer" class="l">Dealer</th><th data-field="nth">Ke-</th><th data-field="first_time" class="l">Check-in pertama</th><th data-field="time" class="l">Check-in ini</th><th data-field="gap_min">Selisih (menit)</th><th data-field="activity" class="l">Jenis</th><th data-field="hasil_visit" class="l">Hasil visit</th><th data-field="effective_same_day" class="l">Billing hari sama</th></tr></thead>
           <tbody></tbody></table></div>
       </div>
     </div>
@@ -240,7 +242,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     <p class="note">Klik kolom untuk mengurutkan. <span class="bname">Semua brand</span>.</p>
     <input class="search" id="sales-search" type="search" placeholder="Cari salesman" aria-label="Cari salesman">
     <div class="scroll"><table id="sales-table" data-source="salesmen" data-row-key="sales_id">
-      <thead><tr><th data-field="salesman" class="l" data-k="salesman">Salesman</th><th data-field="brand" class="l" data-k="brand">Brand</th><th data-field="planned" data-k="planned">Plan</th><th data-field="compliance" data-k="compliance">Kepatuhan</th><th data-field="executed" data-k="executed">Terlaksana</th><th data-field="extra" data-k="extra">Check-in tambahan</th><th data-field="unplanned" data-k="unplanned">Di luar plan</th><th data-field="visit_call" data-k="visit_call">Visit+Call</th><th data-field="ec_same_day_pct" data-k="ec_same_day_pct">EC hari sama</th><th data-field="ec_same_week_pct" data-k="ec_same_week_pct">EC minggu sama</th><th data-field="sales_total" data-k="sales_total">Sales (Rp)</th><th data-field="pct_sales_same_day_ec" data-k="pct_sales_same_day_ec">% sales EC hari sama</th></tr></thead>
+      <thead><tr><th data-field="salesman" class="l" data-k="salesman">Salesman</th><th data-field="brand" class="l" data-k="brand">Brand</th><th data-field="depo" class="l" data-k="depo">Depo</th><th data-field="planned" data-k="planned">Plan</th><th data-field="compliance" data-k="compliance">Kepatuhan</th><th data-field="executed" data-k="executed">Terlaksana</th><th data-field="extra" data-k="extra">Check-in tambahan</th><th data-field="unplanned" data-k="unplanned">Di luar plan</th><th data-field="visit_call" data-k="visit_call">Visit+Call</th><th data-field="off_days" data-k="off_days">Cuti/sakit (hari)</th><th data-field="ec_same_day_pct" data-k="ec_same_day_pct">EC hari sama</th><th data-field="ec_same_week_pct" data-k="ec_same_week_pct">EC minggu sama</th><th data-field="sales_total" data-k="sales_total">Sales (Rp)</th><th data-field="pct_sales_same_day_ec" data-k="pct_sales_same_day_ec">% sales EC hari sama</th></tr></thead>
       <tbody></tbody></table></div>
   </div>
 
@@ -253,11 +255,29 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     </div>
     <input class="search" id="target-search" type="search" placeholder="Cari dealer atau salesman" aria-label="Cari dealer bertarget">
     <div class="scroll"><table id="target-table" data-source="target_dealers" data-row-key="sales_id,dealer_code">
-      <thead><tr><th data-field="salesman" class="l" data-k="salesman">Salesman</th><th data-field="brand" class="l" data-k="brand">Brand</th><th data-field="dealer" class="l" data-k="dealer">Dealer</th><th data-field="target" data-k="target">Target (Rp)</th><th data-field="actual" data-k="actual">Aktual (Rp)</th><th data-field="achievement" data-k="achievement">Pencapaian</th><th data-field="gap" data-k="gap">Kurang (Rp)</th><th data-field="planned_visits" data-k="planned_visits">Plan kunjungan</th><th data-field="visit_call" data-k="visit_call">Visit + Call</th><th data-field="last_visit" class="l" data-k="last_visit">Kunjungan terakhir</th></tr></thead>
+      <thead><tr><th data-field="salesman" class="l" data-k="salesman">Salesman</th><th data-field="brand" class="l" data-k="brand">Brand</th><th data-field="depo" class="l" data-k="depo">Depo</th><th data-field="dealer" class="l" data-k="dealer">Dealer</th><th data-field="target" data-k="target">Target (Rp)</th><th data-field="actual" data-k="actual">Aktual (Rp)</th><th data-field="achievement" data-k="achievement">Pencapaian</th><th data-field="gap" data-k="gap">Kurang (Rp)</th><th data-field="planned_visits" data-k="planned_visits">Plan kunjungan</th><th data-field="visit_call" data-k="visit_call">Visit + Call</th><th data-field="last_visit" class="l" data-k="last_visit">Kunjungan terakhir</th></tr></thead>
       <tbody></tbody></table></div>
     <p class="note" id="target-count"></p>
     <p class="note" id="target-none" hidden>Tidak ada sheet Target di file yang di-upload. Tambahkan sheet bernama Target (kolom UNIQ SC, BP, Dealer Name, Brand, GRAND TOTAL) lalu upload lagi.</p>
   </div>
+  </section>
+  <section id="planw" class="page" hidden>
+    <div id="pw-head">
+      <h2 class="ph">Monitoring plan · <span id="pw-month">—</span></h2>
+      <p class="sub">Salesman yang plan (PJP)-nya belum lengkap per minggu, sampai ke hari yang belum terisi. Periode: tanggal 1 sampai tanggal plan terakhir (<span id="pw-cut">—</span>, PJP Date terbaru di sheet Plan Visit). Minggu = Senin–Sabtu, minggu 1 mulai hari kerja pertama bulan ini. Sumber: sheet Plan Visit.</p>
+    </div>
+    <div class="tiles" id="pw-tiles"></div>
+    <div class="card" id="pw-card">
+      <h2>Plan per salesman per minggu</h2>
+      <p class="note">Daftar salesman = semua salesman di Plan Visit ditambah salesman yang punya target bulan ini (sheet Target), jadi salesman yang belum memasukkan plan sama sekali tetap muncul. Jumlah plan hanya dari Plan Visit. Satu minggu = 6 hari kerja (Sen–Sab); hari cuti/sakit (sheet Adjustment Data Sales) tidak wajib diisi dan plan di hari itu tidak dihitung. Setiap hari tanpa baris Plan Visit ditandai sebagai hari belum terisi, mis. “4/6 hari · kurang Jum 6, Sab 7”. <span class="bname">Semua brand</span>.</p>
+      <div class="filters" id="pw-filter" role="group" aria-label="Filter monitoring plan"></div>
+      <input class="search" id="pw-search" type="search" placeholder="Cari salesman" aria-label="Cari salesman">
+      <div class="scroll"><table id="pw-table" data-source="plan_watch" data-row-key="sales_id">
+        <thead><tr id="pw-head-row"></tr></thead>
+        <tbody></tbody></table></div>
+      <p class="note" id="pw-count"></p>
+      <p class="note" id="pw-none" hidden>Data monitoring plan belum ada untuk upload ini. Upload ulang file billing bulan ini.</p>
+    </div>
   </section>
   </div>
 </div>
@@ -379,6 +399,53 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     return miss.length ? [`Sheet "${label}" is missing column(s): ${miss.join(', ')}.`] : [];
   }
 
+
+  // ---- leave / sick days (optional sheet "Adjustment Data Sales": rows "TAKEOUT SALES - CUTI / SAKIT")
+  // one record per salesman per day; a day with any SAKIT row counts as Sakit, otherwise Cuti
+  function parseLeave(rows) {
+    const out = new Map();
+    (rows || []).forEach((r) => {
+      const vals = Object.values(r);
+      const desc = vals.map((v) => (typeof v === 'string' ? v : '')).find((v) => /TAKEOUT\s+SALES/i.test(v)) || str(r['Description']);
+      const type = /SAKIT/i.test(desc) ? 'Sakit' : /CUTI/i.test(desc) ? 'Cuti' : null;
+      if (!type) return;
+      const sid = vals.map((v) => str(v)).find((v) => /^ID\d{4,}$/.test(v)); if (!sid) return;
+      let d = r['Effective Date'];
+      if (typeof d === 'string') { const m = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); d = m ? Math.round(Date.UTC(+m[3], +m[1] - 1, +m[2]) / 864e5) + 25569 : NaN; }
+      d = Math.floor(num(d)); if (!(d > 0)) return;
+      const sIdx = Object.keys(r).indexOf('Sales'), keys = Object.keys(r);
+      const name = sIdx >= 0 ? str(r[keys[sIdx + 1]]) : '';
+      const k = sid + '|' + d, g = out.get(k) || { sales_id: sid, name, abrand: str(r['Brand']), d, types: new Set(), dealers: 0, reasons: new Set() };
+      g.types.add(type); g.dealers++; const rs = desc.split('|')[1]; if (rs && rs.trim()) g.reasons.add(rs.trim());
+      out.set(k, g);
+    });
+    return [...out.values()].map((g) => ({ ...g, type: g.types.has('Sakit') ? 'Sakit' : 'Cuti' }));
+  }
+  // leave / sick counts plus the dates, e.g. leave_dates "Rab 11 Nov (cuti)" and leave_list "Prayugo – Rab 11 Nov (cuti)"
+  const LDN = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'], LMN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const leaveLab = (x) => { const d = new Date(x.date + 'T00:00:00Z'); return LDN[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + LMN[d.getUTCMonth()] + ' (' + String(x.type).toLowerCase() + ')'; };
+  const leaveCount = (a) => {
+    const b = a.slice().sort((x, y) => x.date.localeCompare(y.date) || String(x.salesman).localeCompare(String(y.salesman)));
+    return { off_days: a.length, cuti_days: a.filter((x) => x.type === 'Cuti').length, sakit_days: a.filter((x) => x.type === 'Sakit').length,
+      leave_dates: b.map(leaveLab).join(', '), leave_list: b.map((x) => x.salesman + ' – ' + leaveLab(x)).join('; ') };
+  };
+  // add leave/sick counts to a set of daily datasets covering fromIso..toIso
+  function leaveFill(dd, leave, fromIso, toIso, info) {
+    const L = (leave || []).filter((x) => x.date >= fromIso && x.date <= toIso);
+    const key = dd.daily_brand.length ? dd.daily_brand[0].date : toIso;
+    const cnt = leaveCount;
+    dd.daily_brand.forEach((b) => Object.assign(b, cnt(L.filter((x) => (b.brand === 'All' || x.brand === b.brand) && (!b.depo || x.depo === b.depo)))));
+    const bySid = new Map(); L.forEach((x) => { if (!bySid.has(x.sales_id)) bySid.set(x.sales_id, []); bySid.get(x.sales_id).push(x); });
+    dd.daily_salesman.forEach((r) => { const a = bySid.get(r.sales_id) || []; Object.assign(r, cnt(a), { off_type: a.length === 1 ? a[0].type : '' }); bySid.delete(r.sales_id); });
+    bySid.forEach((a, sid) => {
+      const i = (info || []).find((s) => s.sales_id === sid) || {};
+      dd.daily_salesman.push({ date: key, sales_id: sid, salesman: i.salesman || a[0].salesman, brand: i.brand || a[0].brand, depo: i.depo || a[0].depo || '', planned: 0, executed: 0, missed: 0, compliance: 0, extra: 0,
+        visit_call: 0, unplanned: 0, ec_same_day: 0, ec_same_day_pct: 0, sales_same_day_ec: 0, sales_total: 0, pct_sales_same_day_ec: 0, ...cnt(a), off_type: a.length === 1 ? a[0].type : '' });
+    });
+    return dd;
+  }
+  root.ecLeaveFill = leaveFill;
+
   function compute(input, opts) {
     const errs = [...checkColumns(input.plan, REQ.plan, 'Plan Visit'), ...checkColumns(input.track, REQ.track, 'Data Tracking Visit'), ...checkColumns(input.bill, REQ.bill, 'Billing Sales')];
     if (errs.length) throw new Error(errs.join(' '));
@@ -398,10 +465,15 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     const mon0 = m0 - wd(m0);
     const week = (d) => 'W' + (Math.floor((d - wd(d) - mon0) / 7) + 1);
 
-    const P = input.plan.filter((r) => num(r['PJP Date']) > 0 && inP(day(r['PJP Date']))).map((r, i) => ({
+    // salesman-days on leave or sick (sheet Adjustment Data Sales): their plan rows are left out of every plan count
+    const offDays = new Set(parseLeave(input.adjust).map((g) => g.sales_id + '|' + g.d));
+    const isOff = (sid, d) => offDays.has(sid + '|' + d);
+    const Pall = input.plan.filter((r) => num(r['PJP Date']) > 0 && inP(day(r['PJP Date']))).map((r, i) => ({
       i, d: day(r['PJP Date']), brand: str(r['Brand']), sid: str(r['Sales ID']), sname: str(r['Sales Name']), dealer: str(r['BP Code']), dname: str(r['Dealer']),
       dtype: str(r['Dealer Type']), src: str(r['Source']), status: str(r['Status Visit'])
     }));
+    const P = Pall.filter((p) => !isOff(p.sid, p.d));
+    const plansOnLeave = Pall.length - P.length;
     const T = input.track.filter((r) => num(r['Tgl. Kunjungan']) > 0 && inP(day(r['Tgl. Kunjungan']))).map((r, i) => {
       const nd = str(r['Nama Dealer']), sc = str(r['Uniq SC']);
       const left8 = nd.slice(0, 8);
@@ -427,6 +499,12 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     pb.forEach((v, k) => bm.set(k, mode(v)));
     bb.forEach((v, k) => { if (!bm.has(k)) bm.set(k, titleCase(mode(v))); });
     const brandOf = (sid) => bm.get(sid) || (sid === '(no ID)' ? '(no Sales ID)' : '(ID not in Plan/Billing)');
+    // depo of each salesman, from the Target sheet (column DEPO); most frequent when a salesman has several
+    const dpList = new Map();
+    (input.target || []).forEach((r) => { const id = str(r['UNIQ SC']), dp = str(r['DEPO']); if (!id || !dp) return; if (!dpList.has(id)) dpList.set(id, []); dpList.get(id).push(dp); });
+    const depoMap = new Map([...dpList].map(([k, v]) => [k, mode(v)]));
+    const depoOf = (sid) => depoMap.get(sid) || '';
+    const DEPOS = [...new Set(depoMap.values())].sort();
     const nameOf = (sid, fb) => names.get(sid) || fb || sid;
     T.forEach((t) => { t.brand = brandOf(t.sid); t.name = t.sc ? nameOf(t.sid, t.sname) : (t.sname || '(blank)'); });
     B.forEach((b) => { b.sbrand = bm.get(b.sid) || ''; });
@@ -478,8 +556,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     // ---- aggregates
     const sub = (arr, f, br) => (br === 'All' ? arr : arr.filter((x) => f(x) === br));
     const S2 = B.filter((b) => b.type === 'ZF2');
-    const kpi = ['All', ...BRANDS].map((br) => {
-      const v = sub(V, (x) => x.brand, br), p = sub(P, (x) => x.brand, br), s = sub(S2, (x) => x.sbrand, br);
+    const kpiRow = (br, v, p, s) => {
       const st = sum(s, (x) => x.net), sd = sum(s.filter((x) => x.q), (x) => x.net), sw = sum(s.filter((x) => x.r), (x) => x.net);
       const ex = p.filter((x) => x.exec).length;
       return {
@@ -491,7 +568,8 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
         ec_forward: sum(v, (x) => x.fwd), ec_forward_pct: ratio(sum(v, (x) => x.fwd), v.length),
         sales_total: st, sales_same_day_ec: sd, sales_same_week_ec: sw, pct_sales_same_day_ec: ratio(sd, st), pct_sales_same_week_ec: ratio(sw, st)
       };
-    });
+    };
+    const kpi = ['All', ...BRANDS].map((br) => kpiRow(br, sub(V, (x) => x.brand, br), sub(P, (x) => x.brand, br), sub(S2, (x) => x.sbrand, br)));
     const weeks = [...new Set([...P, ...V, ...S2].map((x) => x.w))].sort((a, b) => num(a.slice(1)) - num(b.slice(1)));
     const weekRange = weeks.map((w) => {
       const k = num(w.slice(1)) - 1, a = Math.max(m0, mon0 + 7 * k), b = Math.min(cutoff, mon0 + 7 * k + 6);
@@ -543,6 +621,25 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       const tot = sum(sS.filter((x) => x.r), (x) => x.net);
       BK.forEach(([lab, f], k) => { const v = sum(sS.filter(f), (x) => x.net); timing.push({ brand: sm.brand, sales_id: sid, billed: lab, order: k, sales: v, share: ratio(v, tot) }); });
     });
+    // ---- per-depo rows (depo filter): every brand row again, limited to the salesmen of one depo
+    salesmen.forEach((sm) => { sm.depo = depoOf(sm.sales_id); });
+    const inDepo = (d) => (x) => depoOf(x.sid) === d;
+    DEPOS.forEach((dp) => {
+      const Vd = V.filter(inDepo(dp)), Pd = P.filter(inDepo(dp)), Sd = S2.filter(inDepo(dp));
+      ['All', ...BRANDS].forEach((br) => {
+        const v = sub(Vd, (x) => x.brand, br), p = sub(Pd, (x) => x.brand, br), s = sub(Sd, (x) => x.sbrand, br);
+        kpi.push({ ...kpiRow(br, v, p, s), depo: dp });
+        weeks.forEach((w) => {
+          const vw = v.filter((x) => x.w === w), pw = p.filter((x) => x.w === w), sw = s.filter((x) => x.w === w), st = sum(sw, (x) => x.net);
+          weekly.push({ brand: br, depo: dp, week: w, compliance: ratio(pw.filter((x) => x.exec).length, pw.length), visit_call: vw.length,
+            ec_same_day_pct: ratio(sum(vw, (x) => x.ecd), vw.length), ec_same_week_pct: ratio(sum(vw, (x) => x.ecw), vw.length),
+            sales_total: st, pct_sales_same_day_ec: ratio(sum(sw.filter((x) => x.q), (x) => x.net), st) });
+        });
+        TYPES.forEach(([lab, f], k) => { const x = v.filter(f); unplanned.push({ brand: br, depo: dp, type: lab, order: k, visit_call: x.length, ec_same_day_pct: ratio(sum(x, (y) => y.ecd), x.length), ec_same_week_pct: ratio(sum(x, (y) => y.ecw), x.length) }); });
+        const tot = sum(s.filter((x) => x.r), (x) => x.net);
+        BK.forEach(([lab, f], k) => { const val = sum(s.filter(f), (x) => x.net); timing.push({ brand: br, depo: dp, billed: lab, order: k, sales: val, share: ratio(val, tot) }); });
+      });
+    });
     const cg = new Map();
     V.filter((v) => !v.planned).forEach((v) => {
       const k = v.sid + '|' + v.dealer; if (!cg.has(k)) cg.set(k, { sid: v.sid, dealer: v.dealer, dname: v.dname, n: 0, ecw: 0 });
@@ -574,7 +671,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       const act = new Map(); S2.forEach((b) => { const k = b.sid + '|' + b.dealer; act.set(k, (act.get(k) || 0) + b.net); });
       target_dealers = all.map((t) => {
         const k = t.sid + '|' + t.dealer, g = vis.get(k), a = act.get(k) || 0;
-        return { sales_id: t.sid, salesman: names.get(t.sid) || t.sname, brand: t.brands.join(', '), dealer_code: t.dealer, dealer: t.dname, target: t.target, actual: a,
+        return { sales_id: t.sid, salesman: names.get(t.sid) || t.sname, brand: t.brands.join(', '), depo: depoOf(t.sid), dealer_code: t.dealer, dealer: t.dname, target: t.target, actual: a,
           achievement: ratio(a, t.target), gap: Math.max(0, t.target - a), billed: bought.has(k) ? 'Yes' : 'No',
           planned_visits: pl.get(k) || 0, visit_call: g ? g.n : 0, last_visit: g ? iso(g.last) : '' };
       }).sort((a, b) => b.gap - a.gap || b.target - a.target);
@@ -590,21 +687,32 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     }
     // ---- latest billing day
     const L = cutoff, Lv = V.filter((v) => v.d === L), Lp = P.filter((p) => p.d === L), Ls = S2.filter((s) => s.d === L);
-    const daily_brand = ['All', ...BRANDS].map((br) => {
+    const dbRows = [['', Lv, Lp, Ls], ...DEPOS.map((dp) => [dp, Lv.filter(inDepo(dp)), Lp.filter(inDepo(dp)), Ls.filter(inDepo(dp))])];
+    const daily_brand = dbRows.flatMap(([dp, Lv, Lp, Ls]) => ['All', ...BRANDS].map((br) => {
       const v = sub(Lv, (x) => x.brand, br), p = sub(Lp, (x) => x.brand, br), s = sub(Ls, (x) => x.sbrand, br);
       const ex = p.filter((x) => x.exec).length, st = sum(s, (x) => x.net), sd = sum(s.filter((x) => x.q), (x) => x.net);
       return { date: iso(L), brand: br, planned: p.length, executed: ex, missed: p.length - ex, compliance: ratio(ex, p.length), extra: sum(v, (x) => x.extra), visit_call: v.length,
         unplanned: v.filter((x) => !x.planned).length, ec_same_day: sum(v, (x) => x.ecd), ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length),
-        sales_total: st, sales_same_day_ec: sd, pct_sales_same_day_ec: ratio(sd, st) };
-    });
+        sales_total: st, sales_same_day_ec: sd, pct_sales_same_day_ec: ratio(sd, st), ...(dp ? { depo: dp } : {}) };
+    }));
     const daily_salesman = [...new Set([...Lv.map((v) => v.sid), ...Lp.map((p) => p.sid)])].sort().map((sid) => {
       const v = Lv.filter((x) => x.sid === sid), p = Lp.filter((x) => x.sid === sid), s = Ls.filter((x) => x.sid === sid);
       const ex = p.filter((x) => x.exec).length;
-      return { date: iso(L), sales_id: sid, salesman: sid === '(no ID)' ? '(no Sales ID)' : nameOf(sid, (p[0] || {}).sname), brand: p.length ? p[0].brand : brandOf(sid),
+      return { date: iso(L), sales_id: sid, salesman: sid === '(no ID)' ? '(no Sales ID)' : nameOf(sid, (p[0] || {}).sname), brand: p.length ? p[0].brand : brandOf(sid), depo: depoOf(sid),
         planned: p.length, executed: ex, missed: p.length - ex, compliance: ratio(ex, p.length), extra: sum(v, (x) => x.extra), visit_call: v.length, unplanned: v.filter((x) => !x.planned).length,
         ec_same_day: sum(v, (x) => x.ecd), ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length),
         sales_same_day_ec: sum(s.filter((x) => x.q), (x) => x.net), sales_total: sum(s, (x) => x.net), pct_sales_same_day_ec: ratio(sum(s.filter((x) => x.q), (x) => x.net), sum(s, (x) => x.net)) };
     });
+
+    // ---- leave / sick days within the period
+    const leave = parseLeave(input.adjust).map((g) => ({ ...g, date: iso(g.d) }));
+    const leaveAfter = leave.filter((g) => g.d > cutoff).length;
+    const leaveIn = leave.filter((g) => inP(g.d)).map((g) => ({ sales_id: g.sales_id, salesman: names.get(g.sales_id) || g.name || g.sales_id, brand: bm.get(g.sales_id) || g.abrand, depo: depoOf(g.sales_id),
+      date: g.date, type: g.type, dealers_taken_out: g.dealers, reason: [...g.reasons].join('; ') })).sort((a, b) => a.date.localeCompare(b.date) || a.salesman.localeCompare(b.salesman));
+    const lcnt = leaveCount;
+    kpi.forEach((k) => Object.assign(k, lcnt(leaveIn.filter((x) => (k.brand === 'All' || x.brand === k.brand) && (!k.depo || x.depo === k.depo)))));
+    salesmen.forEach((sm) => Object.assign(sm, lcnt(leaveIn.filter((x) => x.sales_id === sm.sales_id))));
+    leaveFill({ daily_brand, daily_salesman }, leaveIn, iso(L), iso(L), salesmen);
     const hhmm = (t) => { const m = Math.floor(Math.round((t - Math.floor(t)) * 86400) / 60); return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
 
     // ---- extra check-ins: 2nd+ Visit/Call on a planned dealer-day (ordered by check-in time)
@@ -616,21 +724,21 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       arr.sort((a, b) => a.t - b.t);
       arr.forEach((v, i) => { v.extraT = i > 0; });
       arr.slice(1).forEach((v, i) => extra_checkins.push({
-        id: v.key + '#' + (i + 2), date: iso(v.d), sales_id: v.sid, salesman: v.name, brand: v.brand, dealer_code: v.dealer, dealer: v.dname,
+        id: v.key + '#' + (i + 2), date: iso(v.d), sales_id: v.sid, salesman: v.name, brand: v.brand, depo: depoOf(v.sid), dealer_code: v.dealer, dealer: v.dname,
         nth: i + 2, first_time: hhmm(arr[0].t), time: hhmm(v.t), gap_min: Math.round((v.t - arr[0].t) * 1440), first_activity: arr[0].act, activity: v.act,
         hasil_visit: v.hasil, effective_same_day: v.ecd ? 'Yes' : 'No'
       }));
     });
     extra_checkins.sort((a, b) => b.date.localeCompare(a.date) || a.salesman.localeCompare(b.salesman) || a.time.localeCompare(b.time));
     const daily_visits = Lv.slice().sort((a, b) => a.t - b.t).map((v, k) => ({
-      visit_id: 'V' + String(k + 1).padStart(4, '0'), date: iso(L), time: hhmm(v.t), sales_id: v.sid, salesman: v.name, brand: v.brand,
+      visit_id: 'V' + String(k + 1).padStart(4, '0'), date: iso(L), time: hhmm(v.t), sales_id: v.sid, salesman: v.name, brand: v.brand, depo: depoOf(v.sid),
       dealer_code: v.dealer, dealer: v.dname, activity: v.act, plan_status: v.planned ? (v.extraT ? 'Extra check-in' : 'Planned') : (v.msub || v.utype), hasil_visit: v.hasil,
       same_day_sales: v.sd, effective_same_day: v.ecd ? 'Yes' : 'No'
     }));
     const seen = new Map();
     const daily_missed = Lp.filter((p) => !p.exec).map((p) => {
       const n = (seen.get(p.key) || 0) + 1; seen.set(p.key, n);
-      return { plan_key: n > 1 ? p.key + '#' + n : p.key, date: iso(L), sales_id: p.sid, salesman: p.sname || nameOf(p.sid), brand: p.brand, dealer_code: p.dealer, dealer: p.dname, visited_same_week: p.sameWeek ? 'Yes' : 'No' };
+      return { plan_key: n > 1 ? p.key + '#' + n : p.key, date: iso(L), sales_id: p.sid, salesman: p.sname || nameOf(p.sid), brand: p.brand, depo: depoOf(p.sid), dealer_code: p.dealer, dealer: p.dname, visited_same_week: p.sameWeek ? 'Yes' : 'No' };
     });
 
 
@@ -660,13 +768,62 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       ignored: { plan: input.plan.length - P.length, tracking: input.track.length - T.length, billing: input.bill.length - B.length }
     };
     meta.target = target_meta;
-    return { meta, kpi, weekly, unplanned, timing, salesmen, candidates, target_open, target_dealers, extra_checkins, daily_brand, daily_salesman, daily_visits, daily_missed, ...(detail ? { detail } : {}) };
+
+    // ---- plan entry check: which salesmen have no plan yet for week 1–4 of the month
+    // weeks are Mon–Sat working weeks; week 1 starts on the first working day, week 4 runs to the end of the month
+    const mEnd = Math.round(Date.UTC(cd.getUTCFullYear(), cd.getUTCMonth() + 1, 0) / 864e5) + 25569;
+    // reference date = latest PJP Date in the Plan Visit sheet for this month; falls back to the latest billing date
+    const pjpMax = Math.max(0, ...input.plan.map((r) => day(r['PJP Date'])).filter((x) => x >= m0 && x <= mEnd));
+    const planRef = pjpMax || cutoff;
+    // weeks from the first working day of the month up to the reference date (the last week can be partial)
+    let ws = m0; while (wd(ws) === 6) ws++;
+    const planWeeks = [];
+    for (let k = 1; ws <= planRef; k++) {
+      const natural = ws + (6 - wd(ws)), we = Math.min(planRef, natural);
+      let work = 0; for (let d = ws; d <= we; d++) if (wd(d) !== 6) work++;
+      if (work) planWeeks.push({ week: k, from: iso(ws), to: iso(we), a: ws, z: we, work_days: work, started: true, finished: natural <= planRef || (() => { let l = natural; while (wd(l) === 6) l--; return l <= planRef; })(), partial: we < natural && (() => { let l = natural; while (wd(l) === 6) l--; return l > planRef; })() });
+      ws = natural + 1;
+    }
+    const PMall = input.plan.filter((r) => num(r['PJP Date']) > 0 && day(r['PJP Date']) >= m0 && day(r['PJP Date']) <= planRef)
+      .map((r) => ({ d: day(r['PJP Date']), sid: str(r['Sales ID']), sname: str(r['Sales Name']), brand: str(r['Brand']), dealer: str(r['BP Code']) }));
+    const PM = PMall.filter((p) => !isOff(p.sid, p.d));
+    // salesmen to check = everyone in Plan Visit plus everyone with a target this month (sheet Target),
+    // so a salesman who has not entered any plan yet still shows up; plan counts come only from Plan Visit
+    const pName = new Map(), pBrand = new Map(), pSrc = new Map();
+    const addSm = (sid, n, br, src) => { if (!sid) return; if (!pName.has(sid)) { pName.set(sid, []); pBrand.set(sid, []); pSrc.set(sid, new Set()); } if (n) pName.get(sid).push(n); if (br) pBrand.get(sid).push(br); pSrc.get(sid).add(src); };
+    PM.forEach((p) => addSm(p.sid, p.sname, p.brand, 'plan'));
+    (input.target || []).forEach((r) => { const id = str(r['UNIQ SC']); if (/^ID\d+/.test(id) && (!num(r['Date']) || (day(r['Date']) >= m0 && day(r['Date']) <= mEnd))) addSm(id, titleCase(str(r['SC NAME'])), titleCase(str(r['Brand'])), 'target'); });
+    const DN = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const dayLab = (d) => { const x = new Date(Math.round((d - 25569) * 864e5)); return DN[x.getUTCDay()] + ' ' + x.getUTCDate(); };
+    planWeeks.forEach((w) => { w.days = []; for (let d = w.a; d <= w.z; d++) if (wd(d) !== 6) w.days.push(d); });
+    const plan_watch = [...pName.keys()].filter((x) => x).sort().map((sid) => {
+      const p = PM.filter((x) => x.sid === sid);
+      const fromPlan = PM.filter((x) => x.sid === sid).map((x) => x.sname).filter(Boolean);
+      const row = { sales_id: sid, salesman: mode(fromPlan.length ? fromPlan : pName.get(sid)) || sid, brand: mode(pBrand.get(sid)) || '', in_plan_sheet: pSrc.get(sid).has('plan') ? 'Yes' : 'No', weeks_incomplete: 0, started_weeks_incomplete: 0, missing_days: 0, started_missing_days: 0 };
+      planWeeks.forEach((w) => {
+        const pw = p.filter((x) => x.d >= w.a && x.d <= w.z), have = new Set(pw.map((x) => x.d));
+        const need = w.days.filter((d) => !isOff(sid, d)), off = w.days.length - need.length;
+        const miss = need.filter((d) => !have.has(d));
+        const st = !miss.length ? 'ok' : miss.length === need.length ? 'none' : 'partial';
+        const k = 'w' + w.week;
+        Object.assign(row, { [k + '_plans']: pw.length, [k + '_days']: need.length - miss.length, [k + '_work']: need.length, [k + '_off']: off, [k + '_dealers']: new Set(pw.map((x) => x.dealer)).size,
+          [k + '_missing']: miss.map(dayLab).join(', '), [k + '_missing_n']: miss.length, [k + '_status']: st });
+        if (st !== 'ok') { row.weeks_incomplete++; if (w.started) row.started_weeks_incomplete++; }
+        row.missing_days += miss.length; row.started_missing_days += miss.length;
+      });
+      return row;
+    });
+    meta.plan_weeks = planWeeks.map(({ a, z, days, ...w }) => w);
+    meta.plan_ref = iso(planRef); meta.plan_ref_time = '';
+    meta.depos = DEPOS;
+    meta.depo_map = Object.fromEntries(depoMap);
+    meta.leave = { has_sheet: !!(input.adjust && input.adjust.length), days: leaveIn.length, after_cutoff: leaveAfter, plans_excluded: plansOnLeave };
+    return { meta, kpi, weekly, unplanned, timing, salesmen, candidates, target_open, target_dealers, extra_checkins, leave: leaveIn, plan_watch, daily_brand, daily_salesman, daily_visits, daily_missed, ...(detail ? { detail } : {}) };
   }
   root.ecCompute = compute;
   root.ecRequired = REQ;
   if (typeof module !== 'undefined') module.exports = { compute, REQ };
 })(typeof window !== 'undefined' ? window : globalThis);
-
 </script>
 <script>
 // Minimal .xlsx writer: sheets of rows -> Uint8Array (zip with deflate). Styles by name.
@@ -762,7 +919,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     files.push(['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
       sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') + '</Types>']);
     files.push(['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>']);
-    const defNames = sheets.map((s, i) => s.autofilter ? `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${s.name.replace(/'/g, "''")}'!$${s.autofilter.replace(':', ':$').replace(/([A-Z]+)(\d+)/g, '$1$$$2')}</definedName>` : '').join('');
+    const defNames = sheets.map((s, i) => s.autofilter ? `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${esc(s.name.replace(/'/g, "''"))}'!$${s.autofilter.replace(':', ':$').replace(/([A-Z]+)(\d+)/g, '$1$$$2')}</definedName>` : '').join('');
     files.push(['xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' +
       sheets.map((s, i) => `<sheet name="${esc(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets>' + (defNames ? `<definedNames>${defNames}</definedNames>` : '') + '</workbook>']);
     files.push(['xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -775,7 +932,6 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
   root.writeXlsx = writeXlsx;
   if (typeof module !== 'undefined') module.exports = { writeXlsx };
 })(typeof window !== 'undefined' ? window : globalThis);
-
 </script>
 <script>
 // Builds the Effective Call workbook (same layout as the analysis workbook) from the calculation result + row detail.
@@ -885,13 +1041,13 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     // ---------- By Salesman
     {
       const rows = [[T(`Effective Call by Salesman — ${per}`)], [S('Plan compliance = planned dealer-days with a Visit/Call logged the same day. Effective Call = same salesman billed the same dealer (ZF2) on the same day / same Mon–Sun week.')], [],
-        [H('Sales ID'), H('Salesman Name'), H('Brand'), ...MH.map(H)]];
+        [H('Sales ID'), H('Salesman Name'), H('Brand'), ...MH.map(H), H('Leave/Sick Days'), H('Cuti'), H('Sakit'), H('Depo'), H('Leave/Sick Dates')]];
       const ids = result.salesmen.slice().sort((a, b) => BR.indexOf(a.brand) - BR.indexOf(b.brand) || b.visit_call - a.visit_call);
-      ids.forEach((sm) => rows.push([sm.sales_id, sm.salesman, sm.brand, ...metrics(VC.filter((v) => v.sid === sm.sales_id), PL.filter((p) => p.sid === sm.sales_id), S2.filter((s) => s.sid === sm.sales_id))]));
+      ids.forEach((sm) => rows.push([sm.sales_id, sm.salesman, sm.brand, ...metrics(VC.filter((v) => v.sid === sm.sales_id), PL.filter((p) => p.sid === sm.sales_id), S2.filter((s) => s.sid === sm.sales_id)), N(sm.off_days || 0), N(sm.cuti_days || 0), N(sm.sakit_days || 0), sm.depo || '', sm.leave_dates || '']));
       const noId = VC.filter((v) => !v.sid.startsWith('ID'));
       if (noId.length) rows.push(['(no ID)', '(no Sales ID)', '', ...metrics(noId, [], [])]);
       rows.push(tot(['TOTAL', '', '', ...metrics(VC, PL, S2)]));
-      sheets.push({ name: 'By Salesman', rows, cols: [12, 30, 10, ...MH.map(() => 14)], freeze: 'D5', autofilter: `A4:${String.fromCharCode(67 + MH.length)}${4 + ids.length}` });
+      sheets.push({ name: 'By Salesman', rows, cols: [12, 30, 10, ...MH.map(() => 14), 14, 8, 8, 18, 30], freeze: 'D5', autofilter: `A4:${String.fromCharCode(72 + MH.length)}${4 + ids.length}` });
     }
 
     // ---------- Unplanned EC
@@ -983,10 +1139,33 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       const rows = [[T('Target vs actual per dealer')], [S('Salesman + dealer pairs with a target this month (Target sheet). Actual = ZF2 billing (no tax) from that salesman to that dealer since the 1st. Target is the full-month target.')], [],
         [H('Brand'), H('Target dealers'), H('Target (Rp)'), H('Actual (Rp)'), H('Achievement %'), H('Dealers below target'), H('No billing yet'), H('Target at no-billing dealers (Rp)'), H('…not visited this month')]];
       m.target.by_brand.forEach((t) => { const r = [t.brand === 'All' ? 'TOTAL' : t.brand, N(t.dealers), R(t.target), R(t.actual), P(t.achievement), N(t.below_target), N(t.open_dealers), R(t.open_target), N(t.open_not_visited)]; rows.push(t.brand === 'All' ? tot(r) : r); });
-      rows.push([], [H('Sales ID'), H('Salesman'), H('Brand'), H('Dealer Code'), H('Dealer'), H('Target (Rp)'), H('Actual (Rp)'), H('Achievement %'), H('Gap to target (Rp)'), H('Billed this month?'), H('Planned visits'), H('Visit + Call'), H('Last visit')]);
+      rows.push([], [H('Sales ID'), H('Salesman'), H('Brand'), H('Depo'), H('Dealer Code'), H('Dealer'), H('Target (Rp)'), H('Actual (Rp)'), H('Achievement %'), H('Gap to target (Rp)'), H('Billed this month?'), H('Planned visits'), H('Visit + Call'), H('Last visit')]);
       const h = rows.length;
-      result.target_dealers.forEach((r) => rows.push([r.sales_id, r.salesman, r.brand, r.dealer_code, r.dealer, R(r.target), R(r.actual), P(r.achievement), R(r.gap), r.billed, N(r.planned_visits), N(r.visit_call), r.last_visit ? D(Math.round(Date.parse(r.last_visit) / 864e5) + 25569) : 'Not visited']));
-      sheets.push({ name: 'Target vs Actual', rows, cols: [12, 28, 10, 12, 36, 18, 18, 13, 18, 12, 12, 11, 12], freeze: `A${h + 1}`, autofilter: `A${h}:M${h + result.target_dealers.length}` });
+      result.target_dealers.forEach((r) => rows.push([r.sales_id, r.salesman, r.brand, r.depo || '', r.dealer_code, r.dealer, R(r.target), R(r.actual), P(r.achievement), R(r.gap), r.billed, N(r.planned_visits), N(r.visit_call), r.last_visit ? D(Math.round(Date.parse(r.last_visit) / 864e5) + 25569) : 'Not visited']));
+      sheets.push({ name: 'Target vs Actual', rows, cols: [12, 28, 10, 18, 12, 36, 18, 18, 13, 18, 12, 12, 11, 12], freeze: `A${h + 1}`, autofilter: `A${h}:N${h + result.target_dealers.length}` });
+    }
+
+    // ---------- Plan check (missing plan days per salesman per week)
+    if (result.plan_watch && result.plan_watch.length && m.plan_weeks && result.plan_watch[0].w1_work !== undefined) {
+      const W = m.plan_weeks;
+      const fmtW = (w) => 'Week ' + w.week + ' (' + iso0(w.from) + '–' + iso0(w.to) + ')';
+      const rows = [[T('Plan check — working days (Mon–Sat) with no plan, per salesman per week')], [S('Period: from the 1st up to ' + (m.plan_ref ? iso0(m.plan_ref) : 'the latest data date') + ' (latest PJP Date in Plan Visit). Week 1 starts on the first working day of the month. A day is filled when the salesman has at least one Plan Visit row that day. Salesmen = Plan Visit plus everyone with a target this month (Target sheet); plan counts come only from Plan Visit.')], [],
+        [H('Week'), H('Working days'), H('Salesmen not fully planned'), H('…with no plan at all'), H('Days not filled (all salesmen)'), H('Status')]];
+      W.forEach((w) => { const k = 'w' + w.week, inc = result.plan_watch.filter((r) => r[k + '_status'] !== 'ok');
+        rows.push([fmtW(w), N(w.work_days), N(inc.length), N(inc.filter((r) => r[k + '_status'] === 'none').length), N(inc.reduce((n, r) => n + r[k + '_missing_n'], 0)), w.partial ? 'Up to ' + iso0(w.to) : 'Finished']); });
+      rows.push([], [H('Sales ID'), H('Salesman'), H('Brand'), H('In Plan Visit sheet?'), ...W.flatMap((w) => [H(fmtW(w) + ' days filled'), H('Week ' + w.week + ' days not filled')]), H('Days not filled (month)')]);
+      const h = rows.length;
+      result.plan_watch.forEach((r) => rows.push([r.sales_id, r.salesman, r.brand, r.in_plan_sheet || '', ...W.flatMap((w) => { const k = 'w' + w.week; return [r[k + '_days'] + '/' + r[k + '_work'], r[k + '_missing'] || '–']; }), N(r.missing_days)]));
+      const last = String.fromCharCode(68 + 2 * W.length + 1);
+      sheets.push({ name: 'Plan Check', rows, cols: [24, 28, 10, 12, ...W.flatMap(() => [14, 34]), 14], freeze: `E${h + 1}`, autofilter: `A${h}:${last}${h + result.plan_watch.length}` });
+    }
+
+    // ---------- Leave & Sick (sheet Adjustment Data Sales)
+    if (result.leave && result.leave.length) {
+      const rows = [[T('Leave & sick days (Adjustment Data Sales)')], [S('One row per salesman per day with a TAKEOUT SALES - CUTI / SAKIT adjustment, within the period. Dealers taken out = number of takeout rows that day.')], [],
+        [H('Date'), H('Sales ID'), H('Salesman'), H('Brand'), H('Type'), H('Dealers taken out'), H('Reason')]];
+      result.leave.forEach((r) => rows.push([D(Math.round(Date.parse(r.date) / 864e5) + 25569), r.sales_id, r.salesman, r.brand, r.type, N(r.dealers_taken_out), r.reason]));
+      sheets.push({ name: 'Leave & Sick', rows, cols: [12, 12, 28, 10, 8, 16, 40], autofilter: `A4:G${4 + result.leave.length}` });
     }
 
     // ---------- detail sheets
@@ -1007,7 +1186,6 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
   root.ecBuildWorkbook = build;
   if (typeof module !== 'undefined') module.exports = { build };
 })(typeof window !== 'undefined' ? window : globalThis);
-
 </script>
 <script>
 // Excel download: builds the analysis workbook from the result + row detail.
@@ -1031,7 +1209,7 @@ window.dash = (function () {
   let params = { brand: 'All', tab: 'daily', salesman: null };
   const fns = [];
   // show the chosen tab first, so its charts are visible (and get a width) when they draw
-  const showTab = () => { const t = params.tab || 'daily', d = document.getElementById('daily'), m = document.getElementById('mtd'); if (d) d.hidden = t !== 'daily' && t !== 'weekly'; if (m) m.hidden = t !== 'mtd'; };
+  const showTab = () => { const t = params.tab || 'daily', d = document.getElementById('daily'), m = document.getElementById('mtd'); if (d) d.hidden = t !== 'daily' && t !== 'weekly'; if (m) m.hidden = t !== 'mtd'; const pw = document.getElementById('planw'); if (pw) pw.hidden = t !== 'plan'; const dr = document.getElementById('depo-filter-row'); if (dr) dr.style.display = t === 'plan' ? 'none' : ''; };
   const run = () => { showTab(); fns.forEach((f) => { try { f(); } catch (e) { console.error(e); } }); };
   let t = null, lastW = 0;
   new ResizeObserver((es) => { const w = Math.round(es[0].contentRect.width); if (w === lastW) return; lastW = w; clearTimeout(t); t = setTimeout(run, 120); }).observe(document.documentElement);
@@ -1066,10 +1244,13 @@ window.dash = (function () {
   const enc = (s) => encodeURIComponent(String(s));
   const brandNow = () => dash.params().brand || 'All';
   const setBrand = (b) => dash.setParams({ brand: b, salesman: null });
+  const depoNow = () => dash.params().depo || '';
+  const inDepo = (r) => { const d = depoNow(); return !d || (r.depo || '') === d; };
   const smId = () => { const v = dash.params().salesman; return v ? v.split('|')[0] : null; };
   const smName = () => { const v = dash.params().salesman; return v ? v.split('|').slice(1).join('|') : null; };
-  const pickRows = (rows, b) => { const id = smId(); return id ? rows.filter((r) => r.sales_id === id) : rows.filter((r) => r.brand === b && !r.sales_id); };
-  const label = (b) => smName() || (b === 'All' ? 'Semua brand' : b);
+  const pickRows = (rows, b) => { const id = smId(); return id ? rows.filter((r) => r.sales_id === id) : rows.filter((r) => r.brand === b && !r.sales_id && (r.depo || '') === depoNow()); };
+  const aggRow = (rows, b) => rows.find((r) => r.brand === b && !r.sales_id && (r.depo || '') === depoNow());
+  const label = (b) => smName() || ((b === 'All' ? 'Semua brand' : b) + (depoNow() ? ' · ' + depoNow() : ''));
   // EC target: 50% of Visit + Call bring billing the same day
   const EC_TARGET = 0.5;
   const ecTarget = (r) => {
@@ -1079,11 +1260,15 @@ window.dash = (function () {
     return need === 0 ? { ok: true, text: 'Target 50% tercapai' } : { ok: false, text: 'Target 50% · kurang ' + int(need) + ' EC' };
   };
   const tgtClass = (v) => (v >= EC_TARGET ? 'good' : 'bad');
-  window.ecFmt = { pct, int, rpB, rpM, enc, brandNow, setBrand, smId, smName, pickRows, label, EC_TARGET, ecTarget, tgtClass };
+  // leave / sick days: '–' when none, otherwise e.g. '2 (1 cuti, 1 sakit)'
+  const lvTxt = (r, dates = true) => { const n = r.off_days || 0; if (!n) return '–'; if (dates && r.leave_dates) return int(n) + ' · ' + r.leave_dates; const p = []; if (r.cuti_days) p.push(int(r.cuti_days) + ' cuti'); if (r.sakit_days) p.push(int(r.sakit_days) + ' sakit'); return int(n) + ' (' + p.join(', ') + ')'; };
+  window.ecFmt = { pct, int, rpB, rpM, enc, brandNow, setBrand, smId, smName, pickRows, label, depoNow, inDepo, aggRow, EC_TARGET, ecTarget, tgtClass, lvTxt };
 
   // salesman picker
   const smSel = document.getElementById('sm-filter');
   smSel.addEventListener('change', () => dash.setParams({ salesman: smSel.value || null }));
+  const dpSel = document.getElementById('depo-filter');
+  dpSel.addEventListener('change', () => dash.setParams({ depo: dpSel.value || null, salesman: null }));
 
   // brand chips
   const bf = document.getElementById('brand-filter');
@@ -1096,13 +1281,14 @@ window.dash = (function () {
 
   // KPI tiles (markup built once, filled in onData)
   const TILES = [
-    ['planned', 'Total plan', null, 'Kunjungan dealer di PJP'],
+    ['planned', 'Total plan', null, 'Kunjungan dealer di PJP, tanpa hari cuti/sakit'],
     ['executed', 'Plan terlaksana', null, 'Plan yang ada Visit/Call di hari plan'],
     ['compliance', 'Kepatuhan plan', null, 'Plan terlaksana di hari plan'],
     ['missed', 'Plan terlewat', null, 'Dealer di plan yang tidak dikunjungi di hari plan'],
     ['extra', 'Check-in tambahan', null, 'Check-in ke-2 dst. pada plan yang terlaksana'],
     ['unplanned', 'Di luar plan', null, 'Visit/Call yang tidak di-plan untuk hari itu'],
     ['visit_call', 'Visit + Call', null, 'Terlaksana + Tambahan + Di luar plan'],
+    ['off_days', 'Cuti / sakit (hari)', null, ''],
     ['ec_same_day', 'Jumlah EC hari sama', null, 'Visit/Call dengan billing di hari yang sama'],
     ['ec_same_day_pct', 'EC hari sama', null, 'Visit/Call dengan billing di hari yang sama'],
     ['sales_same_day_ec', 'Sales dari EC hari sama', null, ''],
@@ -1123,7 +1309,8 @@ window.dash = (function () {
       c.append('dari total sales Rp ');
       const s = document.createElement('span'); s.textContent = '—'; s.dataset.source = 'kpi'; s.dataset.field = 'sales_total'; s.dataset.where = 'brand=All';
       c.append(s);
-    } else c.textContent = hint;
+    } else if (f === 'off_days') { c.id = 'lv-mtd'; c.textContent = 'Hari salesman cuti atau sakit'; }
+    else c.textContent = hint;
     d.append(l, v, c);
     if (f === 'ec_same_day_pct') { const t = document.createElement('div'); t.className = 'tgt'; t.id = 'tgt-mtd'; d.append(t); }
     tiles.append(d);
@@ -1135,7 +1322,8 @@ window.dash = (function () {
     document.querySelectorAll('.ec .bname, .ec .tb').forEach((x) => { x.textContent = label(b); });
     const sd = dash.data('salesmen'), sid = smId();
     if (sd.status === 'ok') {
-      const opts = sd.data.filter((r) => b === 'All' || r.brand === b).slice().sort((a, c) => String(a.salesman).localeCompare(String(c.salesman)));
+      { const res = dash.result && dash.result(), ds = (res && res.meta && res.meta.depos) || []; if (dpSel.options.length !== ds.length + 1) dpSel.replaceChildren(new Option('Semua depo', ''), ...ds.map((x) => new Option(x, x))); dpSel.value = depoNow(); document.getElementById('depo-filter-row').hidden = !ds.length; }
+      const opts = sd.data.filter((r) => (b === 'All' || r.brand === b) && inDepo(r)).slice().sort((a, c) => String(a.salesman).localeCompare(String(c.salesman)));
       const vals = opts.map((r) => r.sales_id + '|' + r.salesman);
       const cur = dash.params().salesman;
       if (cur && !vals.includes(cur)) { const o = cur.split('|'); opts.unshift({ sales_id: o[0], salesman: o.slice(1).join('|') }); vals.unshift(cur); }
@@ -1143,7 +1331,7 @@ window.dash = (function () {
       smSel.value = cur || '';
     }
     const k = dash.data('kpi');
-    const row = sid ? (sd.status === 'ok' ? sd.data.find((r) => r.sales_id === sid) : null) : (k.status === 'ok' ? k.data.find((r) => r.brand === b) : null);
+    const row = sid ? (sd.status === 'ok' ? sd.data.find((r) => r.sales_id === sid) : null) : (k.status === 'ok' ? aggRow(k.data, b) : null);
     document.querySelectorAll('[data-source="kpi"][data-field]').forEach((el) => {
       if (el.closest('#brand-table') || el.closest('#daily')) return;
       el.dataset.where = 'brand=' + enc(b);
@@ -1153,8 +1341,10 @@ window.dash = (function () {
       let v = row[f];
       if (v === undefined && (f === 'ec_same_day' || f === 'ec_same_week')) v = Math.round(row[f + '_pct'] * row.visit_call);
       if (f === 'missed') v = row.planned - row.executed;
-      el.textContent = ['visit_call', 'planned', 'extra', 'executed', 'ec_same_day', 'ec_same_week', 'missed', 'unplanned'].includes(f) ? int(v) : f === 'sales_same_day_ec' ? 'Rp ' + rpM(v) : f === 'sales_total' ? rpM(v) : pct(v);
+      if (f === 'off_days' && v === undefined) { el.textContent = '–'; return; }
+      el.textContent = ['visit_call', 'planned', 'extra', 'executed', 'ec_same_day', 'ec_same_week', 'missed', 'unplanned', 'off_days'].includes(f) ? int(v) : f === 'sales_same_day_ec' ? 'Rp ' + rpM(v) : f === 'sales_total' ? rpM(v) : pct(v);
     });
+    { const lv = document.getElementById('lv-mtd'); lv.textContent = row && row.off_days !== undefined ? int(row.cuti_days || 0) + ' cuti · ' + int(row.sakit_days || 0) + ' sakit (hari salesman)' + (row.leave_list ? ' · ' + row.leave_list : '') : 'Tambahkan sheet Adjustment Data Sales'; }
     const tg = ecTarget(row), tEl = document.getElementById('tgt-mtd'), vEl = document.querySelector('#tile-ec_same_day_pct .val');
     tEl.textContent = row ? tg.text : ''; tEl.className = 'tgt' + (tg.ok === true ? ' good' : tg.ok === false ? ' bad' : '');
     vEl.style.color = row && tg.ok !== null ? (tg.ok ? 'var(--color-ok)' : 'var(--color-bad)') : '';
@@ -1170,10 +1360,10 @@ window.dash = (function () {
     const k = dash.data('kpi'); tb.replaceChildren();
     if (k.status !== 'ok') return;
     const b = brandNow();
-    k.data.forEach((r) => {
+    k.data.filter((r) => !r.sales_id && (r.depo || '') === window.ecFmt.depoNow()).forEach((r) => {
       const tr = document.createElement('tr'); tr.dataset.key = r.brand; tr.className = 'click' + (r.brand === b ? ' sel' : '');
-      [r.brand === 'All' ? 'Semua' : r.brand, int(r.planned), pct(r.compliance), int(r.executed), int(r.extra), int(r.unplanned), int(r.visit_call), pct(r.ec_same_day_pct), pct(r.ec_same_week_pct), pct(r.ec_forward_pct), pct(r.pct_sales_same_day_ec), rpB(r.sales_total)]
-        .forEach((t, i) => { const td = document.createElement('td'); td.textContent = t; if (i === 7) td.className = window.ecFmt.tgtClass(r.ec_same_day_pct); tr.appendChild(td); });
+      [r.brand === 'All' ? 'Semua' : r.brand, int(r.planned), pct(r.compliance), int(r.executed), int(r.extra), int(r.unplanned), int(r.visit_call), window.ecFmt.lvTxt(r, false), pct(r.ec_same_day_pct), pct(r.ec_same_week_pct), pct(r.ec_forward_pct), pct(r.pct_sales_same_day_ec), rpB(r.sales_total)]
+        .forEach((t, i) => { const td = document.createElement('td'); td.textContent = t; if (i === 8) td.className = window.ecFmt.tgtClass(r.ec_same_day_pct); tr.appendChild(td); });
       tb.appendChild(tr);
     });
   });
@@ -1275,11 +1465,11 @@ window.dash = (function () {
     document.querySelectorAll('#sales-table th').forEach((th) => th.setAttribute('aria-sort', th.dataset.k === sortK ? (asc ? 'ascending' : 'descending') : 'none'));
     if (d.status !== 'ok') return;
     const b = brandNow(), s = q.value.trim().toLowerCase();
-    const rows = d.data.filter((r) => (b === 'All' || r.brand === b) && (!window.ecFmt.smId() || r.sales_id === window.ecFmt.smId()) && (!s || String(r.salesman).toLowerCase().includes(s)))
+    const rows = d.data.filter((r) => (b === 'All' || r.brand === b) && window.ecFmt.inDepo(r) && (!window.ecFmt.smId() || r.sales_id === window.ecFmt.smId()) && (!s || String(r.salesman).toLowerCase().includes(s)))
       .sort((a, c) => { const x = a[sortK], y = c[sortK]; const o = typeof x === 'string' ? String(x).localeCompare(String(y)) : x - y; return asc ? o : -o; });
     rows.forEach((r) => {
       const tr = document.createElement('tr'); tr.dataset.key = r.sales_id;
-      const cells = [[r.salesman, 'l'], [r.brand, 'l'], [int(r.planned)], [pct(r.compliance), r.planned > 0 && r.compliance < 0.5 ? 'bad' : ''], [int(r.executed)], [int(r.extra)], [int(r.unplanned)], [int(r.visit_call)], [pct(r.ec_same_day_pct), r.visit_call ? window.ecFmt.tgtClass(r.ec_same_day_pct) : ''], [pct(r.ec_same_week_pct)], [rpM(r.sales_total)], [pct(r.pct_sales_same_day_ec)]];
+      const cells = [[r.salesman, 'l'], [r.brand, 'l'], [r.depo || '–', 'l'], [int(r.planned)], [pct(r.compliance), r.planned > 0 && r.compliance < 0.5 ? 'bad' : ''], [int(r.executed)], [int(r.extra)], [int(r.unplanned)], [int(r.visit_call)], [window.ecFmt.lvTxt(r), r.off_days ? 'warn' : ''], [pct(r.ec_same_day_pct), r.visit_call ? window.ecFmt.tgtClass(r.ec_same_day_pct) : ''], [pct(r.ec_same_week_pct)], [rpM(r.sales_total)], [pct(r.pct_sales_same_day_ec)]];
       cells.forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
       tb.appendChild(tr);
     });
@@ -1297,7 +1487,7 @@ window.dash = (function () {
     const d = dash.data('extra_checkins'); box.replaceChildren(); tb.replaceChildren();
     if (document.getElementById('mtd').hidden || d.status !== 'ok') return;
     const b = brandNow(), sid = window.ecFmt.smId(), s = q.value.trim().toLowerCase();
-    const rows = d.data.filter((r) => (b === 'All' || r.brand === b) && (!sid || r.sales_id === sid));
+    const rows = d.data.filter((r) => (b === 'All' || r.brand === b) && window.ecFmt.inDepo(r) && (!sid || r.sales_id === sid));
     none.hidden = rows.length > 0; box.parentElement.parentElement.hidden = rows.length === 0;
     // bars: count per salesman
     const g = d3.rollups(rows, (v) => v.length, (r) => r.salesman).sort((a, c) => c[1] - a[1] || a[0].localeCompare(c[0])).slice(0, 15);
@@ -1310,7 +1500,7 @@ window.dash = (function () {
     svg.append('g').selectAll('text').data(g).join('text').text((r) => int(r[1])).attr('x', (r) => x(r[1]) + 6).attr('y', (r, i) => 2 + i * rowH + rowH / 2).attr('dy', '0.35em').style('fill', 'var(--color-fg-muted)').style('font-size', 'var(--cds-font-size-caption)');
     rows.filter((r) => !s || (r.dealer + ' ' + r.salesman).toLowerCase().includes(s)).forEach((r) => {
       const tr = document.createElement('tr'); tr.dataset.key = r.id;
-      [[fd(r.date), 'l'], [r.salesman, 'l'], [r.dealer, 'l'], [int(r.nth)], [r.first_time + ' (' + r.first_activity + ')', 'l'], [r.time, 'l'], [int(r.gap_min), r.gap_min <= 10 ? 'bad' : ''], [r.activity, 'l'], [r.hasil_visit, 'l'], [window.ecT(r.effective_same_day), 'l' + (r.effective_same_day === 'Yes' ? ' good' : '')]]
+      [[fd(r.date), 'l'], [r.salesman, 'l'], [r.depo || '–', 'l'], [r.dealer, 'l'], [int(r.nth)], [r.first_time + ' (' + r.first_activity + ')', 'l'], [r.time, 'l'], [int(r.gap_min), r.gap_min <= 10 ? 'bad' : ''], [r.activity, 'l'], [r.hasil_visit, 'l'], [window.ecT(r.effective_same_day), 'l' + (r.effective_same_day === 'Yes' ? ' good' : '')]]
         .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
       tb.appendChild(tr);
     });
@@ -1338,7 +1528,7 @@ window.dash = (function () {
     none.hidden = !res || has; wrapT.hidden = !has; q.hidden = !has; tfEl.hidden = !has;
     if (!has) return;
     const b = brandNow(), sid = window.ecFmt.smId(), s = q.value.trim().toLowerCase();
-    const base = d.data.filter((r) => (b === 'All' || r.brand.split(', ').includes(b)) && (!sid || r.sales_id === sid));
+    const base = d.data.filter((r) => (b === 'All' || r.brand.split(', ').includes(b)) && window.ecFmt.inDepo(r) && (!sid || r.sales_id === sid));
     const T = base.reduce((t, r) => t + r.target, 0), A = base.reduce((t, r) => t + r.actual, 0);
     const below = base.filter((r) => r.actual < r.target).length, nob = base.filter((r) => r.billed === 'No'), nov = nob.filter((r) => !r.visit_call).length;
     [['Rp ' + rp(T), 'target'], ['Rp ' + rp(A), 'aktual'], [pct(A / (T || 1)), 'pencapaian', A < T ? 'bad' : 'good'], [int(below) + ' dari ' + int(base.length), 'dealer di bawah target'], [int(nob.length), 'belum belanja (' + int(nov) + ' belum dikunjungi)', nob.length ? 'bad' : '']]
@@ -1348,7 +1538,7 @@ window.dash = (function () {
     const frag = document.createDocumentFragment();
     rows.forEach((r) => {
       const tr = document.createElement('tr'); tr.dataset.key = encodeURIComponent(r.sales_id) + ',' + encodeURIComponent(r.dealer_code);
-      [[r.salesman, 'l'], [r.brand, 'l'], [r.dealer, 'l'], [rp(r.target)], [rp(r.actual), r.billed === 'No' ? 'bad' : ''], [pct(r.achievement), r.achievement >= 1 ? 'good' : r.billed === 'No' ? 'bad' : ''], [r.gap ? rp(r.gap) : '–'],
+      [[r.salesman, 'l'], [r.brand, 'l'], [r.depo || '–', 'l'], [r.dealer, 'l'], [rp(r.target)], [rp(r.actual), r.billed === 'No' ? 'bad' : ''], [pct(r.achievement), r.achievement >= 1 ? 'good' : r.billed === 'No' ? 'bad' : ''], [r.gap ? rp(r.gap) : '–'],
         [int(r.planned_visits), r.planned_visits === 0 && r.actual < r.target ? 'bad' : ''], [int(r.visit_call), r.visit_call === 0 && r.actual < r.target ? 'bad' : ''], [fd(r.last_visit), 'l' + (r.last_visit ? '' : ' bad')]]
         .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
       frag.appendChild(tr);
@@ -1372,7 +1562,7 @@ window.dash = (function () {
   const tabs = document.querySelectorAll('.ec .tab');
   tabs.forEach((t) => t.addEventListener('click', () => { dash.setParams({ tab: t.dataset.tab }); }));
   const want = location.hash.slice(1);
-  if (want === 'mtd' || want === 'daily' || want === 'weekly') dash.setParams({ tab: want });
+  if (want === 'mtd' || want === 'daily' || want === 'weekly' || want === 'plan') dash.setParams({ tab: want });
 
   // salesman filter
   const smClear = document.getElementById('sm-clear');
@@ -1387,6 +1577,7 @@ window.dash = (function () {
     ['extra', 'Check-in tambahan', 'int', null],
     ['unplanned', 'Di luar plan', 'int', null],
     ['visit_call', 'Visit + Call', 'int', null],
+    ['off_days', 'Cuti / sakit (hari)', 'int', null],
     ['ec_same_day', 'Jumlah EC hari sama', 'int', null],
     ['ec_same_day_pct', 'EC hari sama', 'pct', 'ec_same_day_pct'],
     ['sales_same_day_ec', 'Sales dari EC hari sama', 'rp', null],
@@ -1407,7 +1598,8 @@ window.dash = (function () {
     } else if (cmp) {
       c.append('Bulan berjalan: ');
       const m = document.createElement('span'); m.className = 'kmark'; m.dataset.source = 'kpi'; m.dataset.field = cmp; m.textContent = '—'; c.append(m);
-    } else if (f === 'planned') c.textContent = 'Kunjungan dealer di PJP';
+    } else if (f === 'off_days') { c.id = 'lv-day'; c.textContent = 'Hari salesman cuti atau sakit'; }
+    else if (f === 'planned') c.textContent = 'Kunjungan dealer di PJP, tanpa hari cuti/sakit';
     else if (f === 'executed') c.textContent = 'Plan yang ada Visit/Call di hari plan';
     else if (f === 'ec_same_day') c.textContent = 'Visit/Call dengan billing di hari kunjungan';
     else if (f === 'missed') c.textContent = 'Dealer di plan yang tidak dikunjungi di hari plan';
@@ -1419,7 +1611,7 @@ window.dash = (function () {
     tilesEl.append(d);
   });
 
-  const fmt = (kind, v) => kind === 'pct' ? pct(v) : kind === 'rp' ? 'Rp ' + rpM(v) : int(v);
+  const fmt = (kind, v) => v === undefined || v === null ? '–' : kind === 'pct' ? pct(v) : kind === 'rp' ? 'Rp ' + rpM(v) : int(v);
 
   dash.onData(() => {
     const tab = dash.params().tab || 'daily';
@@ -1436,15 +1628,16 @@ window.dash = (function () {
     const sid = window.ecFmt.smId(), dsm = dash.data('daily_salesman'), sAll = dash.data('salesmen');
     let row = null;
     if (sid) { const r = dsm.status === 'ok' ? dsm.data.find((x) => x.date === day && x.sales_id === sid) : null;
-      row = r || (dsm.status === 'ok' ? { planned: 0, executed: 0, missed: 0, compliance: 0, extra: 0, visit_call: 0, unplanned: 0, ec_same_day: 0, ec_same_day_pct: 0, sales_same_day_ec: 0, sales_total: 0, pct_sales_same_day_ec: 0 } : null); }
-    else row = d.status === 'ok' ? d.data.find((r) => r.date === day && r.brand === b) : null;
+      row = r || (dsm.status === 'ok' ? { planned: 0, executed: 0, missed: 0, compliance: 0, extra: 0, visit_call: 0, unplanned: 0, ec_same_day: 0, ec_same_day_pct: 0, sales_same_day_ec: 0, sales_total: 0, pct_sales_same_day_ec: 0, off_days: 0, cuti_days: 0, sakit_days: 0 } : null); }
+    else row = d.status === 'ok' ? d.data.find((r) => r.date === day && r.brand === b && (r.depo || '') === window.ecFmt.depoNow()) : null;
     document.querySelectorAll('#daily .dmark').forEach((el) => {
       el.dataset.where = 'date=' + enc(day || '') + '&brand=' + enc(b);
       el.classList.toggle('dash-skeleton', d.status === 'loading');
       const kind = el.dataset.kind || 'int';
       el.textContent = row ? fmt(kind, row[el.dataset.field]) : '—';
     });
-    const krow = sid ? (sAll.status === 'ok' ? sAll.data.find((r) => r.sales_id === sid) : null) : (k.status === 'ok' ? k.data.find((r) => r.brand === b) : null);
+    { const lv = document.getElementById('lv-day'); lv.textContent = row && row.off_days !== undefined ? int(row.cuti_days || 0) + ' cuti · ' + int(row.sakit_days || 0) + ' sakit (hari salesman)' + (row.leave_list ? ' · ' + row.leave_list : '') : 'Tambahkan sheet Adjustment Data Sales'; }
+    const krow = sid ? (sAll.status === 'ok' ? sAll.data.find((r) => r.sales_id === sid) : null) : (k.status === 'ok' ? window.ecFmt.aggRow(k.data, b) : null);
     document.querySelectorAll('#daily .kmark').forEach((el) => {
       el.dataset.where = 'brand=' + enc(b);
       el.textContent = krow ? pct(krow[el.dataset.field]) : '—';
@@ -1479,13 +1672,13 @@ window.dash = (function () {
     document.querySelectorAll('#day-sales th').forEach((th) => th.setAttribute('aria-sort', th.dataset.k === sortK ? (asc ? 'ascending' : 'descending') : 'none'));
     if (d.status !== 'ok') return;
     const b = brandNow(), day = window.ecDay.dayNow(), sm = dash.params().salesman;
-    d.data.filter((r) => r.date === day && (b === 'All' || r.brand === b) && (!sm || r.sales_id === sm.split('|')[0]))
+    d.data.filter((r) => r.date === day && (b === 'All' || r.brand === b) && window.ecFmt.inDepo(r) && (!sm || r.sales_id === sm.split('|')[0]))
       .sort((a, c) => { const x = a[sortK], y = c[sortK]; const o = typeof x === 'string' ? String(x).localeCompare(String(y)) : x - y; return asc ? o : -o; })
       .forEach((r) => {
         const tr = document.createElement('tr'); tr.dataset.key = enc(r.date) + ',' + enc(r.sales_id); tr.dataset.sid = r.sales_id; tr.dataset.name = r.salesman;
         tr.className = 'click' + (sm && sm.startsWith(r.sales_id + '|') ? ' sel' : '');
-        const cells = [[r.salesman, 'l'], [r.brand, 'l'], [int(r.planned)], [int(r.missed), r.missed > 0 ? 'bad' : ''], [r.planned ? pct(r.compliance) : '–', r.planned && r.compliance < 0.5 ? 'bad' : ''],
-          [int(r.executed)], [int(r.extra)], [int(r.unplanned)], [int(r.visit_call)], [int(r.ec_same_day), r.visit_call > 0 && r.ec_same_day === 0 ? 'bad' : ''], [pct(r.ec_same_day_pct), r.visit_call ? window.ecFmt.tgtClass(r.ec_same_day_pct) : ''], [rpM(r.sales_same_day_ec)]];
+        const cells = [[r.salesman, 'l'], [r.brand, 'l'], [r.depo || '–', 'l'], [int(r.planned)], [int(r.missed), r.missed > 0 ? 'bad' : ''], [r.planned ? pct(r.compliance) : '–', r.planned && r.compliance < 0.5 ? 'bad' : ''],
+          [int(r.executed)], [int(r.extra)], [int(r.unplanned)], [int(r.visit_call)], [window.ecFmt.lvTxt(r), r.off_days ? 'warn' : ''], [int(r.ec_same_day), r.visit_call > 0 && r.ec_same_day === 0 ? 'bad' : ''], [pct(r.ec_same_day_pct), r.visit_call ? window.ecFmt.tgtClass(r.ec_same_day_pct) : ''], [rpM(r.sales_same_day_ec)]];
         cells.forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
         tb.appendChild(tr);
       });
@@ -1503,10 +1696,10 @@ window.dash = (function () {
     if (d.status !== 'ok') return;
     const b = brandNow(), day = window.ecDay.dayNow(), sm = dash.params().salesman, s = q.value.trim().toLowerCase();
     const sid = sm ? sm.split('|')[0] : null;
-    d.data.filter((r) => r.date === day && (b === 'All' || r.brand === b) && (!sid || r.sales_id === sid) && (!s || (r.dealer + ' ' + r.salesman).toLowerCase().includes(s)))
+    d.data.filter((r) => r.date === day && (b === 'All' || r.brand === b) && window.ecFmt.inDepo(r) && (!sid || r.sales_id === sid) && (!s || (r.dealer + ' ' + r.salesman).toLowerCase().includes(s)))
       .forEach((r) => {
         const tr = document.createElement('tr'); tr.dataset.key = r.visit_id;
-        [[r.time, 'l'], [r.salesman, 'l'], [r.dealer, 'l'], [r.activity, 'l'], [window.ecT(r.plan_status), 'l' + (r.plan_status === 'Not in plan' ? ' bad' : '')], [r.hasil_visit, 'l'], [window.ecT(r.effective_same_day), 'l' + (r.effective_same_day === 'Yes' ? ' good' : '')], [r.same_day_sales ? rpM(r.same_day_sales) : '–']]
+        [[r.time, 'l'], [r.salesman, 'l'], [r.depo || '–', 'l'], [r.dealer, 'l'], [r.activity, 'l'], [window.ecT(r.plan_status), 'l' + (r.plan_status === 'Not in plan' ? ' bad' : '')], [r.hasil_visit, 'l'], [window.ecT(r.effective_same_day), 'l' + (r.effective_same_day === 'Yes' ? ' good' : '')], [r.same_day_sales ? rpM(r.same_day_sales) : '–']]
           .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
         tb.appendChild(tr);
       });
@@ -1523,11 +1716,11 @@ window.dash = (function () {
     if (d.status !== 'ok') return;
     const b = brandNow(), day = window.ecDay.dayNow(), sm = dash.params().salesman;
     const sid = sm ? sm.split('|')[0] : null;
-    d.data.filter((r) => r.date === day && (b === 'All' || r.brand === b) && (!sid || r.sales_id === sid))
+    d.data.filter((r) => r.date === day && (b === 'All' || r.brand === b) && window.ecFmt.inDepo(r) && (!sid || r.sales_id === sid))
       .sort((a, c) => a.salesman.localeCompare(c.salesman) || a.dealer.localeCompare(c.dealer))
       .forEach((r) => {
         const tr = document.createElement('tr'); tr.dataset.key = r.plan_key;
-        [[r.salesman, 'l'], [r.dealer, 'l'], [window.ecT(r.visited_same_week), 'l' + (r.visited_same_week === 'No' ? ' bad' : '')]]
+        [[r.salesman, 'l'], [r.depo || '–', 'l'], [r.dealer, 'l'], [window.ecT(r.visited_same_week), 'l' + (r.visited_same_week === 'No' ? ' bad' : '')]]
           .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.appendChild(td); });
         tb.appendChild(tr);
       });
@@ -1547,44 +1740,112 @@ window.dash = (function () {
   const DAYS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
   const dlab = (s) => { const x = new Date(Math.round((s - 25569) * 864e5)); return DAYS[x.getUTCDay()] + ' ' + x.getUTCDate(); };
   // one day (fromIso === toIso) or a range of days, e.g. a week; dayIso is the key written into every row
-  function range(detail, fromIso, toIso, salesmen, dayIso) {
+  function range(detail, fromIso, toIso, salesmen, dayIso, leave, depoMap) {
     const a = serial(fromIso), z = serial(toIso), multi = a !== z, inR = (d) => d >= a && d <= z;
     const V = detail.visits.filter((v) => v.plan !== 'N/A' && inR(v.d)).sort((x, y) => x.t - y.t);
     const P = detail.plans.filter((p) => inR(p.d)).sort((x, y) => x.d - y.d);
     const S = detail.bills.filter((b) => b.type === 'ZF2' && inR(b.d));
-    const nm = new Map((salesmen || []).map((s) => [s.sales_id, s.salesman]));
+    const nm = new Map((salesmen || []).map((s) => [s.sales_id, s.salesman])), dpm = new Map([...(salesmen || []).map((s) => [s.sales_id, s.depo || '']), ...Object.entries(depoMap || {})]);
+    const dpOf = (sid) => dpm.get(sid) || '';
+    const DEPOS = [...new Set([...dpm.values()].filter((x) => x))].sort();
     const sub = (arr, f, br) => (br === 'All' ? arr : arr.filter((x) => f(x) === br));
-    const daily_brand = ['All', ...BRANDS].map((br) => {
+    const groups = [['', V, P, S], ...DEPOS.map((dp) => [dp, V.filter((x) => dpOf(x.sid) === dp), P.filter((x) => dpOf(x.sid) === dp), S.filter((x) => dpOf(x.sid) === dp)])];
+    const daily_brand = groups.flatMap(([dp, V, P, S]) => ['All', ...BRANDS].map((br) => {
       const v = sub(V, (x) => x.brand, br), p = sub(P, (x) => x.brand, br), s = sub(S, (x) => x.sbrand, br);
       const ex = p.filter((x) => x.exec === 'Yes').length, st = sum(s, (x) => x.net), sd = sum(s.filter((x) => x.q), (x) => x.net);
       return { date: dayIso, brand: br, planned: p.length, executed: ex, missed: p.length - ex, compliance: ratio(ex, p.length), extra: sum(v, (x) => x.extra), visit_call: v.length,
         unplanned: v.filter((x) => x.plan === 'Unplanned').length, ec_same_day: sum(v, (x) => x.ecd), ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length),
-        sales_total: st, sales_same_day_ec: sd, pct_sales_same_day_ec: ratio(sd, st) };
-    });
+        sales_total: st, sales_same_day_ec: sd, pct_sales_same_day_ec: ratio(sd, st), ...(dp ? { depo: dp } : {}) };
+    }));
     const daily_salesman = [...new Set([...V.map((v) => v.sid), ...P.map((p) => p.sid)])].sort().map((sid) => {
       const v = V.filter((x) => x.sid === sid), p = P.filter((x) => x.sid === sid), s = S.filter((x) => x.sid === sid);
       const ex = p.filter((x) => x.exec === 'Yes').length, st = sum(s, (x) => x.net), sd = sum(s.filter((x) => x.q), (x) => x.net);
       return { date: dayIso, sales_id: sid, salesman: sid === '(no ID)' ? '(no Sales ID)' : nm.get(sid) || (p[0] && p[0].name) || (v[0] && v[0].name) || sid,
-        brand: p.length ? p[0].brand : (v[0] ? v[0].brand : ''), planned: p.length, executed: ex, missed: p.length - ex, compliance: ratio(ex, p.length), extra: sum(v, (x) => x.extra),
+        brand: p.length ? p[0].brand : (v[0] ? v[0].brand : ''), depo: dpOf(sid), planned: p.length, executed: ex, missed: p.length - ex, compliance: ratio(ex, p.length), extra: sum(v, (x) => x.extra),
         visit_call: v.length, unplanned: v.filter((x) => x.plan === 'Unplanned').length, ec_same_day: sum(v, (x) => x.ecd), ec_same_day_pct: ratio(sum(v, (x) => x.ecd), v.length),
         sales_same_day_ec: sd, sales_total: st, pct_sales_same_day_ec: ratio(sd, st) };
     });
     const daily_visits = V.map((v, k) => ({
-      visit_id: 'V' + String(k + 1).padStart(4, '0'), date: dayIso, time: multi ? dlab(v.d) + ' · ' + hhmm(v.t) : hhmm(v.t), sales_id: v.sid, salesman: v.name, brand: v.brand, dealer_code: v.dealer, dealer: v.dname,
+      visit_id: 'V' + String(k + 1).padStart(4, '0'), date: dayIso, time: multi ? dlab(v.d) + ' · ' + hhmm(v.t) : hhmm(v.t), sales_id: v.sid, salesman: v.name, brand: v.brand, depo: dpOf(v.sid), dealer_code: v.dealer, dealer: v.dname,
       activity: v.act, plan_status: v.plan === 'Planned' ? (v.extra ? 'Extra check-in' : 'Planned') : (v.msub || v.utype), hasil_visit: v.hasil, same_day_sales: v.sd,
       effective_same_day: v.ecd ? 'Yes' : 'No' }));
     const seen = new Map();
     const daily_missed = P.filter((p) => p.exec !== 'Yes').map((p) => {
       const n = (seen.get(p.key) || 0) + 1; seen.set(p.key, n);
-      return { plan_key: n > 1 ? p.key + '#' + n : p.key, date: dayIso, sales_id: p.sid, salesman: p.name || nm.get(p.sid) || p.sid, brand: p.brand, dealer_code: p.dealer, dealer: multi ? p.dname + ' (' + dlab(p.d) + ')' : p.dname, visited_same_week: p.sameWeek };
+      return { plan_key: n > 1 ? p.key + '#' + n : p.key, date: dayIso, sales_id: p.sid, salesman: p.name || nm.get(p.sid) || p.sid, brand: p.brand, depo: dpOf(p.sid), dealer_code: p.dealer, dealer: multi ? p.dname + ' (' + dlab(p.d) + ')' : p.dname, visited_same_week: p.sameWeek };
     });
-    return { daily_brand, daily_salesman, daily_visits, daily_missed };
+    const out = { daily_brand, daily_salesman, daily_visits, daily_missed };
+    if (root.ecLeaveFill) root.ecLeaveFill(out, leave, fromIso, toIso, salesmen);
+    return out;
   }
-  const daily = (detail, dayIso, salesmen) => range(detail, dayIso, dayIso, salesmen, dayIso);
+  const daily = (detail, dayIso, salesmen, leave, depoMap) => range(detail, dayIso, dayIso, salesmen, dayIso, leave, depoMap);
   root.ecDaily = daily; root.ecRange = range;
   if (typeof module !== 'undefined') module.exports = { daily, range };
 })(typeof window !== 'undefined' ? window : globalThis);
-
+</script>
+<script>
+(function () {
+  const { int, brandNow } = window.ecFmt;
+  const tilesEl = document.getElementById('pw-tiles'), headRow = document.getElementById('pw-head-row'), tb = document.querySelector('#pw-table tbody');
+  const fEl = document.getElementById('pw-filter'), q = document.getElementById('pw-search'), cnt = document.getElementById('pw-count'), none = document.getElementById('pw-none');
+  const fmt = (x) => d3.utcFormat('%-d %b')(new Date(x + 'T00:00:00Z'));
+  const todayIso = () => { const n = new Date(); return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())).toISOString().slice(0, 10); };
+  let pf = 'any', sortK = 'missing', asc = false;
+  fEl.addEventListener('click', (e) => { const b = e.target.closest('[data-pf]'); if (b) { pf = b.dataset.pf; draw(); } });
+  headRow.addEventListener('click', (e) => { const th = e.target.closest('th[data-k]'); if (!th) return; const k = th.dataset.k; if (sortK === k) asc = !asc; else { sortK = k; asc = k === 'salesman' || k === 'brand'; } draw(); });
+  q.addEventListener('input', () => draw());
+  function draw() {
+    const d = dash.data('plan_watch'), res = dash.result && dash.result(), W = res && res.meta && res.meta.plan_weeks;
+    tb.replaceChildren(); cnt.textContent = '';
+    if (!res) return;
+    const has = d.status === 'ok' && d.data.length && W && d.data[0].w1_work !== undefined;
+    none.hidden = !!has; document.querySelector('#pw-table').parentElement.hidden = !has; q.hidden = !has; fEl.hidden = !has;
+    if (!has) { tilesEl.replaceChildren(); headRow.replaceChildren(); return; }
+    document.getElementById('pw-month').textContent = d3.utcFormat('%B %Y')(new Date(res.meta.period_start + 'T00:00:00Z'));
+    { const ref = res.meta.plan_ref || res.meta.latest_billing_date; document.getElementById('pw-cut').textContent = d3.utcFormat('%A %-d %B %Y')(new Date(ref + 'T00:00:00Z')) + (res.meta.plan_ref_time ? ', ' + res.meta.plan_ref_time.slice(11) : ''); }
+    const stat = (w) => (w.partial ? 'sampai ' + fmt(w.to) : 'selesai');
+    const live = W.filter((w) => stat(w) !== 'akan datang');
+    const missNow = (r) => live.reduce((n, w) => n + r['w' + w.week + '_missing_n'], 0);
+    const b = brandNow(), sid = window.ecFmt.smId(), s = q.value.trim().toLowerCase();
+    const base = d.data.filter((r) => (b === 'All' || r.brand === b) && (!sid || r.sales_id === sid));
+    // cards: one per week — salesmen whose week is not fully planned (Mon–Sat)
+    tilesEl.replaceChildren(...W.map((w) => {
+      const k = 'w' + w.week, inc = base.filter((r) => r[k + '_status'] !== 'ok'), empty = inc.filter((r) => r[k + '_status'] === 'none').length;
+      const days = inc.reduce((n, r) => n + r[k + '_missing_n'], 0);
+      const el = document.createElement('div'); el.className = 'tile'; el.id = 'pw-tile-' + w.week;
+      const l = document.createElement('div'); l.className = 'lab'; l.textContent = 'Minggu ' + w.week + ' · ' + fmt(w.from) + '–' + fmt(w.to) + ' (' + stat(w) + ')';
+      const v = document.createElement('div'); v.className = 'val'; v.textContent = int(inc.length); v.style.color = inc.length ? 'var(--color-bad)' : 'var(--color-ok)';
+      const c = document.createElement('div'); c.className = 'cmp';
+      c.textContent = 'dari ' + int(base.length) + ' salesman belum lengkap · ' + int(days) + ' hari belum terisi' + (empty ? ' · ' + int(empty) + ' belum ada plan sama sekali' : '');
+      el.append(l, v, c); return el;
+    }));
+    const chips = [['any', 'Ada hari belum terisi'], ...W.map((w) => ['w' + w.week, 'Belum lengkap minggu ' + w.week]), ['all', 'Semua salesman']];
+    fEl.replaceChildren(...chips.map(([k, lab]) => { const c = document.createElement('button'); c.type = 'button'; c.className = 'chip'; c.dataset.pf = k; c.textContent = lab; c.setAttribute('aria-pressed', String(k === pf)); return c; }));
+    const cols = [['salesman', 'Salesman', 'l'], ['brand', 'Brand', 'l'], ...W.map((w) => ['w' + w.week + '_days', 'Minggu ' + w.week + ' (' + fmt(w.from) + '–' + fmt(w.to) + ')', 'l']), ['missing', 'Hari belum terisi', '']];
+    headRow.replaceChildren(...cols.map(([k, lab, c]) => { const th = document.createElement('th'); th.dataset.k = k; th.dataset.field = k === 'missing' ? 'missing_days' : k; th.textContent = lab; if (c) th.className = c; th.setAttribute('aria-sort', k === sortK ? (asc ? 'ascending' : 'descending') : 'none'); return th; }));
+    const rows = base.filter((r) => (pf === 'all' || (pf === 'any' && W.some((w) => r['w' + w.week + '_status'] !== 'ok')) || (pf.startsWith('w') && r[pf + '_status'] !== 'ok')) && (!s || (r.salesman + ' ' + r.sales_id).toLowerCase().includes(s)))
+      .sort((a, c) => {
+        if (sortK === 'missing') { const o = (missNow(a) - missNow(c)) || (a.missing_days - c.missing_days); return (asc ? o : -o) || a.salesman.localeCompare(c.salesman); }
+        const x = a[sortK], y = c[sortK]; const o = typeof x === 'string' ? x.localeCompare(y) : x - y; return asc ? o : -o;
+      });
+    const frag = document.createDocumentFragment();
+    rows.forEach((r) => {
+      const tr = document.createElement('tr'); tr.dataset.key = r.sales_id;
+      const cells = [[r.salesman + (r.in_plan_sheet === 'No' ? ' · tidak ada di Plan Visit' : ''), 'l' + (r.in_plan_sheet === 'No' ? ' bad' : '')], [r.brand, 'l'], ...W.map((w) => {
+        const k = 'w' + w.week, st = r[k + '_status'], frac = int(r[k + '_days']) + '/' + int(r[k + '_work']) + ' hari' + (r[k + '_off'] ? ' (+' + int(r[k + '_off']) + ' cuti/sakit)' : '');
+        if (st === 'ok') return [frac + ' · ' + int(r[k + '_plans']) + ' plan', 'l good'];
+        const cls = 'l bad';
+        if (st === 'none') return [frac + ' · belum ada plan', cls];
+        return [frac + ' · kurang ' + r[k + '_missing'], cls];
+      }), [int(missNow(r)), missNow(r) ? 'bad' : '']];
+      cells.forEach(([tx, c]) => { const td = document.createElement('td'); td.textContent = tx; if (c) td.className = c; tr.appendChild(td); });
+      frag.appendChild(tr);
+    });
+    tb.appendChild(frag);
+    cnt.textContent = int(rows.length) + ' salesman ditampilkan. Hari belum terisi (merah) = hari kerja (Sen–Sab) tanpa satu pun plan, dari tanggal 1 sampai tanggal plan terakhir.';
+  }
+  dash.onData(draw);
+})();
 </script>
 <script>
 // GitHub Pages version: data comes from an uploaded Billing file (kept in this browser) or from data.json next to this page.
@@ -1647,9 +1908,9 @@ window.dash = (function () {
     let dd;
     if (kind === 'W') {
       const w = m.weeks.find((x) => x.week === val), dt = (x) => new Date(x + 'T00:00:00Z');
-      dd = window.ecRange(current.detail, w.from, w.to, res.salesmen, w.to);
+      dd = window.ecRange(current.detail, w.from, w.to, res.salesmen, w.to, res.leave, res.meta.depo_map);
       window.ecDayLabel = 'Minggu ' + val.slice(1) + ' · ' + d3.utcFormat('%-d')(dt(w.from)) + '–' + d3.utcFormat('%-d %b %Y')(dt(w.to));
-    } else { dd = window.ecDaily(current.detail, val, res.salesmen); window.ecDayLabel = null; }
+    } else { dd = window.ecDaily(current.detail, val, res.salesmen, res.leave, res.meta.depo_map); window.ecDayLabel = null; }
     dash._set({ status: 'ok', result: { ...res, ...dd } }); daySt.textContent = '';
   });
   function use(doc, result, source, detail) {
@@ -1657,7 +1918,7 @@ window.dash = (function () {
     setEmpty(false); dash._set({ status: 'ok', result }); showSource(doc, result, source); fillDays(result); if (pickMode === 'weekly') dayPick.dispatchEvent(new Event('change'));
   }
 
-  const WANT = { plan: /^plan visit/i, track: /^data tracking visit/i, bill: /^billing/i, target: /^target/i };
+  const WANT = { plan: /^plan visit/i, track: /^data tracking visit/i, bill: /^billing/i, target: /^target/i, adjust: /^adjustment/i };
   async function handle(file) {
     if (!file) return;
     btn.setAttribute('aria-disabled', 'true');
@@ -1669,7 +1930,7 @@ window.dash = (function () {
       const miss = Object.entries({ 'Plan Visit': WANT.plan, 'Data Tracking Visit': WANT.track, 'Billing Sales B2B …': WANT.bill }).filter(([, re]) => !pick(re)).map(([n]) => n);
       if (miss.length) throw new Error('Sheet tidak ditemukan: ' + miss.join(', ') + '. Sheet di file ini: ' + wb.sheetNames.join(', ') + '.');
       say('Menghitung effective call…'); await new Promise((r) => setTimeout(r, 30));
-      const full = window.ecCompute({ plan: wb.rows[pick(WANT.plan)], track: wb.rows[pick(WANT.track)], bill: wb.rows[pick(WANT.bill)], target: pick(WANT.target) ? wb.rows[pick(WANT.target)] : null }, { detail: true });
+      const full = window.ecCompute({ plan: wb.rows[pick(WANT.plan)], track: wb.rows[pick(WANT.track)], bill: wb.rows[pick(WANT.bill)], target: pick(WANT.target) ? wb.rows[pick(WANT.target)] : null, adjust: pick(WANT.adjust) ? wb.rows[pick(WANT.adjust)] : null }, { detail: true });
       const { detail, ...result } = full;
       const doc = { file_name: file.name, uploaded_at: new Date().toISOString() };
       try { await idbSet(KEY, { doc, result, detail }); } catch (e) { /* storage blocked: still show it */ }
@@ -1720,7 +1981,6 @@ window.dash = (function () {
   boot();
 })();
 </script>
-
 
 </body>
 </html>
