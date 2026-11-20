@@ -269,13 +269,14 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     <div class="tiles" id="pw-tiles"></div>
     <div class="card" id="pw-card">
       <h2>Plan per salesman per minggu</h2>
-      <p class="note">Daftar salesman = semua salesman di Plan Visit ditambah salesman yang punya target bulan ini (sheet Target), jadi salesman yang belum memasukkan plan sama sekali tetap muncul. Jumlah plan hanya dari Plan Visit. Satu minggu = 6 hari kerja (Sen–Sab); hari cuti/sakit (sheet Adjustment Data Sales) tidak wajib diisi dan plan di hari itu tidak dihitung. Setiap hari tanpa baris Plan Visit ditandai sebagai hari belum terisi, mis. “4/6 hari · kurang Jum 6, Sab 7”. <span class="bname">Semua brand</span>.</p>
+      <p class="note">Daftar salesman = semua salesman di Plan Visit ditambah salesman yang punya target bulan ini (sheet Target), jadi salesman yang belum memasukkan plan sama sekali tetap muncul. Jumlah plan dari Plan Visit, ditambah penggantian dealer (REPLACEMENT) dan plan tambahan (ADDITIONAL) dari sheet Adjustment Data Sales. Satu minggu = 6 hari kerja (Sen–Sab); hari cuti/sakit (sheet Adjustment Data Sales) tidak wajib diisi dan plan di hari itu tidak dihitung. Setiap hari tanpa baris Plan Visit ditandai sebagai hari belum terisi, mis. “4/6 hari · kurang Jum 6, Sab 7”. <span class="bname">Semua brand</span>.</p>
       <div class="filters" id="pw-filter" role="group" aria-label="Filter monitoring plan"></div>
       <input class="search" id="pw-search" type="search" placeholder="Cari salesman" aria-label="Cari salesman">
       <div class="scroll"><table id="pw-table" data-source="plan_watch" data-row-key="sales_id">
         <thead><tr id="pw-head-row"></tr></thead>
         <tbody></tbody></table></div>
       <p class="note" id="pw-count"></p>
+      <p class="note" id="pw-adj" hidden></p>
       <p class="note" id="pw-none" hidden>Data monitoring plan belum ada untuk upload ini. Upload ulang file billing bulan ini.</p>
     </div>
   </section>
@@ -446,7 +447,49 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
   }
   root.ecLeaveFill = leaveFill;
 
+  // ---- plan adjustments (sheet "Adjustment Data Sales"), applied to Plan Visit before anything is counted
+  // REPLACEMENT: on Effective Date the salesman's plan at Old BP Code becomes New BP Code / New Dealer
+  // ADDITIONAL:  a plan at New BP Code / New Dealer is added on Effective Date (skipped if already planned)
+  const adjDay = (v) => { if (typeof v === 'string') { const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return Math.round(Date.UTC(+m[3], +m[1] - 1, +m[2]) / 864e5) + 25569; } return day(v); };
+  function adjustPlan(plan, adj) {
+    const info = { replaced: 0, added: 0, replace_not_found: 0, skipped_dup: 0, list: [] };
+    if (!adj || !adj.length) return { plan, info };
+    const rows = plan.slice();
+    const k3 = (sid, d, bp) => sid + '|' + d + '|' + bp;
+    const idx = new Map(); rows.forEach((r, i) => { const k = k3(str(r['Sales ID']), day(r['PJP Date']), str(r['BP Code'])); if (!idx.has(k)) idx.set(k, []); idx.get(k).push(i); });
+    const drop = new Set();
+    adj.forEach((r) => {
+      // values are read by position after the Sales ID cell: name, action, old BP, old dealer, new BP, new dealer, dealer type
+      // (the sheet's header row has one column less than the data, so the header names are shifted)
+      const v = Object.values(r).map((x) => str(x)), si = v.findIndex((x) => /^ID\d{4,}$/.test(x)); if (si < 0) return;
+      const sid = v[si], name = v[si + 1], act = (v[si + 2] || '').toUpperCase();
+      if (act !== 'REPLACEMENT' && act !== 'ADDITIONAL') return;
+      const obp = v[si + 3], nbp = v[si + 5], ndl = v[si + 6], dtyp = v[si + 7] || '';
+      const d = adjDay(r['Effective Date']);
+      if (!(d > 0) || !nbp) return;
+      const base = { 'PJP Date': d, 'Brand': str(r['Brand']), 'Sales ID': sid, 'Sales Name': name, 'BP Code': nbp, 'Dealer': ndl, 'Dealer Type': dtyp, 'Source': act, 'Status Visit': '' };
+      const live = (k) => (idx.get(k) || []).filter((i) => !drop.has(i));
+      const has = live(k3(sid, d, nbp)).length > 0;
+      const rec = { action: act, sales_id: sid, salesman: name, date: iso(d), old_bp: obp, new_bp: nbp, new_dealer: ndl, result: '' };
+      if (act === 'REPLACEMENT') {
+        const hit = live(k3(sid, d, obp));
+        if (hit.length) {
+          if (has) { drop.add(hit[0]); rec.result = 'old plan removed (new dealer already planned)'; }
+          else { const i = hit[0]; rows[i] = { ...rows[i], 'BP Code': nbp, 'Dealer': ndl || rows[i]['Dealer'], 'Source': 'REPLACEMENT' }; const k = k3(sid, d, nbp); idx.set(k, [...(idx.get(k) || []), i]); rec.result = 'replaced'; }
+          info.replaced++;
+        } else if (!has) { rows.push(base); idx.set(k3(sid, d, nbp), [rows.length - 1]); info.replace_not_found++; rec.result = 'old plan not found, new dealer added'; }
+        else { info.skipped_dup++; rec.result = 'already planned'; }
+      } else if (has) { info.skipped_dup++; rec.result = 'already planned'; }
+      else { rows.push(base); idx.set(k3(sid, d, nbp), [rows.length - 1]); info.added++; rec.result = 'added'; }
+      info.list.push(rec);
+    });
+    info.list.sort((x, y) => x.date.localeCompare(y.date) || x.salesman.localeCompare(y.salesman));
+    return { plan: rows.filter((_, i) => !drop.has(i)), info };
+  }
+
   function compute(input, opts) {
+    const adjusted = adjustPlan(input.plan || [], input.adjust);
+    input = { ...input, plan: adjusted.plan };
     const errs = [...checkColumns(input.plan, REQ.plan, 'Plan Visit'), ...checkColumns(input.track, REQ.track, 'Data Tracking Visit'), ...checkColumns(input.bill, REQ.bill, 'Billing Sales')];
     if (errs.length) throw new Error(errs.join(' '));
 
@@ -818,6 +861,7 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
     meta.depos = DEPOS;
     meta.depo_map = Object.fromEntries(depoMap);
     meta.leave = { has_sheet: !!(input.adjust && input.adjust.length), days: leaveIn.length, after_cutoff: leaveAfter, plans_excluded: plansOnLeave };
+    meta.plan_adjust = adjusted.info;
     return { meta, kpi, weekly, unplanned, timing, salesmen, candidates, target_open, target_dealers, extra_checkins, leave: leaveIn, plan_watch, daily_brand, daily_salesman, daily_visits, daily_missed, ...(detail ? { detail } : {}) };
   }
   root.ecCompute = compute;
@@ -1167,6 +1211,15 @@ body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-ant
       result.leave.forEach((r) => rows.push([D(Math.round(Date.parse(r.date) / 864e5) + 25569), r.sales_id, r.salesman, r.brand, r.type, N(r.dealers_taken_out), r.reason]));
       sheets.push({ name: 'Leave & Sick', rows, cols: [12, 12, 28, 10, 8, 16, 40], autofilter: `A4:G${4 + result.leave.length}` });
     }
+
+    // ---------- Plan Adjustments (sheet Adjustment Data Sales: REPLACEMENT / ADDITIONAL)
+    { const L = (result.meta.plan_adjust && result.meta.plan_adjust.list) || [];
+      if (L.length) {
+        const rows = [[T('Plan adjustments (Adjustment Data Sales)')], [S('Dealer replacements and additional plans applied to Plan Visit before every plan count. REPLACEMENT = the plan at the old BP becomes the new BP on that date; ADDITIONAL = a plan added on that date.')], [],
+          [H('Date'), H('Action'), H('Sales ID'), H('Salesman'), H('Old BP Code'), H('New BP Code'), H('New Dealer'), H('Result')]];
+        L.forEach((r) => rows.push([D(Math.round(Date.parse(r.date) / 864e5) + 25569), r.action, r.sales_id, r.salesman, r.old_bp, r.new_bp, r.new_dealer, r.result]));
+        sheets.push({ name: 'Plan Adjustments', rows, cols: [12, 14, 12, 28, 13, 13, 30, 34], autofilter: `A4:H${4 + L.length}` });
+      } }
 
     // ---------- detail sheets
     sheets.push({ name: 'Plan vs Actual', freeze: 'A2', autofilter: `A1:N${PL.length + 1}`, cols: [12, 7, 10, 12, 28, 11, 32, 12, 14, 24, 12, 10, 14, 14],
@@ -1801,6 +1854,10 @@ window.dash = (function () {
     const has = d.status === 'ok' && d.data.length && W && d.data[0].w1_work !== undefined;
     none.hidden = !!has; document.querySelector('#pw-table').parentElement.hidden = !has; q.hidden = !has; fEl.hidden = !has;
     if (!has) { tilesEl.replaceChildren(); headRow.replaceChildren(); return; }
+    { const A = res.meta.plan_adjust, el = document.getElementById('pw-adj');
+      if (A && A.list && A.list.length) { const rp = A.list.filter((x) => x.action === 'REPLACEMENT').length, ad = A.list.filter((x) => x.action === 'ADDITIONAL').length;
+        el.textContent = 'Penyesuaian dari sheet Adjustment Data Sales sudah dimasukkan ke plan: ' + rp + ' penggantian dealer, ' + ad + ' plan tambahan' + (A.skipped_dup ? ' (' + A.skipped_dup + ' sudah ada di Plan Visit, tidak dihitung dua kali)' : '') + '. ' + A.list.map((x) => x.salesman + ' ' + d3.utcFormat('%-d %b')(new Date(x.date + 'T00:00:00Z')) + ': ' + (x.action === 'REPLACEMENT' ? x.old_bp + ' → ' + x.new_bp : '+ ' + x.new_bp) + ' ' + x.new_dealer).join('; ') + '.'; el.hidden = false; }
+      else el.hidden = true; }
     document.getElementById('pw-month').textContent = d3.utcFormat('%B %Y')(new Date(res.meta.period_start + 'T00:00:00Z'));
     { const ref = res.meta.plan_ref || res.meta.latest_billing_date; document.getElementById('pw-cut').textContent = d3.utcFormat('%A %-d %B %Y')(new Date(ref + 'T00:00:00Z')) + (res.meta.plan_ref_time ? ', ' + res.meta.plan_ref_time.slice(11) : ''); }
     const stat = (w) => (w.partial ? 'sampai ' + fmt(w.to) : 'selesai');
