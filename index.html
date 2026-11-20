@@ -1344,7 +1344,7 @@ window.dash = (function () {
       if (f === 'off_days' && v === undefined) { el.textContent = '–'; return; }
       el.textContent = ['visit_call', 'planned', 'extra', 'executed', 'ec_same_day', 'ec_same_week', 'missed', 'unplanned', 'off_days'].includes(f) ? int(v) : f === 'sales_same_day_ec' ? 'Rp ' + rpM(v) : f === 'sales_total' ? rpM(v) : pct(v);
     });
-    { const lv = document.getElementById('lv-mtd'); lv.textContent = row && row.off_days !== undefined ? int(row.cuti_days || 0) + ' cuti · ' + int(row.sakit_days || 0) + ' sakit (hari salesman)' + (row.leave_list ? ' · ' + row.leave_list : '') : 'Tambahkan sheet Adjustment Data Sales'; }
+    { const lv = document.getElementById('lv-mtd'); lv.textContent = row && row.off_days !== undefined ? int(row.cuti_days || 0) + ' cuti · ' + int(row.sakit_days || 0) + ' sakit' : 'Tambahkan sheet Adjustment Data Sales'; }
     const tg = ecTarget(row), tEl = document.getElementById('tgt-mtd'), vEl = document.querySelector('#tile-ec_same_day_pct .val');
     tEl.textContent = row ? tg.text : ''; tEl.className = 'tgt' + (tg.ok === true ? ' good' : tg.ok === false ? ' bad' : '');
     vEl.style.color = row && tg.ok !== null ? (tg.ok ? 'var(--color-ok)' : 'var(--color-bad)') : '';
@@ -1636,7 +1636,7 @@ window.dash = (function () {
       const kind = el.dataset.kind || 'int';
       el.textContent = row ? fmt(kind, row[el.dataset.field]) : '—';
     });
-    { const lv = document.getElementById('lv-day'); lv.textContent = row && row.off_days !== undefined ? int(row.cuti_days || 0) + ' cuti · ' + int(row.sakit_days || 0) + ' sakit (hari salesman)' + (row.leave_list ? ' · ' + row.leave_list : '') : 'Tambahkan sheet Adjustment Data Sales'; }
+    { const lv = document.getElementById('lv-day'); lv.textContent = row && row.off_days !== undefined ? int(row.cuti_days || 0) + ' cuti · ' + int(row.sakit_days || 0) + ' sakit' : 'Tambahkan sheet Adjustment Data Sales'; }
     const krow = sid ? (sAll.status === 'ok' ? sAll.data.find((r) => r.sales_id === sid) : null) : (k.status === 'ok' ? window.ecFmt.aggRow(k.data, b) : null);
     document.querySelectorAll('#daily .kmark').forEach((el) => {
       el.dataset.where = 'brand=' + enc(b);
